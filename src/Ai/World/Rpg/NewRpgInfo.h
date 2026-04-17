@@ -74,9 +74,7 @@ struct NewRpgInfo
     uint32 stuckTs{0};
     uint32 stuckAttempts{0};
     WorldPosition moveFarPos;
-    TravelPlan travelPlan;
-    bool HasActiveTravelPlan() const { return travelPlan.IsActive(); }
-    void ClearTravel();
+    // END MOVE_FAR
 
     using RpgData = std::variant<
         Idle,

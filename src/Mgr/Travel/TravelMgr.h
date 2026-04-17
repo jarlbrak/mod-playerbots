@@ -268,6 +268,12 @@ public:
     std::vector<mGridCoord> getmGridCoords(WorldPosition secondPos);
     std::vector<WorldPosition> frommGridCoord(mGridCoord GridCoord);
 
+    void loadMapAndVMap(uint32 mapId, uint8 x, uint8 y);
+
+    void loadMapAndVMap() { loadMapAndVMap(GetMapId(), getmGridCoord().first, getmGridCoord().second); }
+
+    void loadMapAndVMaps(WorldPosition secondPos);
+
     // Display functions
     WorldPosition getDisplayLocation();
     float getDisplayX() { return getDisplayLocation().GetPositionY() * -1.0; }
@@ -501,15 +507,9 @@ public:
         radiusMin = radiusMin1;
         radiusMax = radiusMax1;
     }
-    virtual ~TravelDestination();
+    virtual ~TravelDestination() = default;
 
-    void addPoint(WorldPosition* pos)
-    {
-        if (!pos)
-            return;
-
-        points.push_back(new WorldPosition(*pos));
-    }
+    void addPoint(WorldPosition* pos) { points.push_back(pos); }
 
     void setExpireDelay(uint32 delay) { expireDelay = delay; }
 
@@ -673,7 +673,7 @@ public:
     bool isActive(Player* bot) override;
     virtual CreatureTemplate const* GetCreatureTemplate();
     std::string const getName() override { return "RpgTravelDestination"; }
-    int32 getEntry() override { return entry; }
+    int32 getEntry() override { return 0; }
     std::string const getTitle() override;
 
 protected:
@@ -846,12 +846,6 @@ protected:
 class TravelMgr
 {
 public:
-    struct NpcLocation
-    {
-        WorldLocation loc;
-        uint32 entry;
-    };
-
     static TravelMgr& instance()
     {
         static TravelMgr instance;
@@ -870,7 +864,6 @@ public:
     const std::vector<WorldLocation> GetTeleportLocations(Player* bot);
     const std::vector<WorldLocation> GetTravelHubs(Player* bot);
     std::vector<WorldLocation> GetCityLocations(Player* bot);
-    bool SelectAuctioneerByMap(Player* bot, NpcLocation& outAuctioneer);
     const std::vector<WorldLocation>& GetLocsPerLevelCache(uint8 level) { return locsPerLevelCache[level]; }
 
     template <class D, class W, class URBG>
@@ -975,14 +968,18 @@ private:
         bool InsideBracket(uint32 val) const { return val >= low && val <= high; }
     };
 
+    struct BankerLocation
+    {
+        WorldLocation loc;
+        uint32 entry;
+    };
+
     // Navigation caches
     std::map<uint32, WorldPosition> allianceFlightMasterCache;
     std::map<uint32, WorldPosition> hordeFlightMasterCache;
     std::map<uint8, std::vector<WorldLocation>> allianceHubsPerLevelCache;
     std::map<uint8, std::vector<WorldLocation>> hordeHubsPerLevelCache;
-    std::map<uint8, std::vector<NpcLocation>> bankerLocsPerLevelCache;
-    std::unordered_map<uint16, std::unordered_map<uint32, std::vector<NpcLocation>>> hordeAuctioneerCache;
-    std::unordered_map<uint16, std::unordered_map<uint32, std::vector<NpcLocation>>> allianceAuctioneerCache;
+    std::map<uint8, std::vector<BankerLocation>> bankerLocsPerLevelCache;
     std::unordered_map<uint32, WorldLocation> bankerEntryToLocation;
     std::map<uint8, std::vector<WorldLocation>> locsPerLevelCache;
     std::unordered_map<uint32, std::vector<WorldLocation>> creatureSpawnsByTemplate;
