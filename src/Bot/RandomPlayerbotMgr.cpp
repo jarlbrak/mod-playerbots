@@ -1291,7 +1291,7 @@ void RandomPlayerbotMgr::CheckLfgQueue()
         // dungeons appropriate to their level.
         for (uint32 i = 1; i < sLFGDungeonStore.GetNumRows(); ++i)
         {
-            lfg::LFGDungeonEntry const* dungeon = sLFGDungeonStore.LookupEntry(i);
+            LFGDungeonEntry const* dungeon = sLFGDungeonStore.LookupEntry(i);
             if (!dungeon)
                 continue;
             if (dungeon->TypeID != lfg::LFG_TYPE_RANDOM &&
