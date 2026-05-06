@@ -589,6 +589,9 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
     if (sPlayerbotAIConfig.autoSaveMana && PlayerbotAI::IsHeal(player, true))
         nonCombatEngine->addStrategy("save mana", false);
 
+    if (sPlayerbotAIConfig.acceptAllQuestsStrategy)
+        nonCombatEngine->addStrategy("accept all quests", false);
+
     if ((sRandomPlayerbotMgr.IsRandomBot(player)) && !player->InBattleground())
     {
         Player* master = facade->GetMaster();
