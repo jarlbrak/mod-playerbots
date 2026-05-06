@@ -977,6 +977,13 @@ AiPlayerbot.RandomBotGroupNearby = 0
 # Default: 1 (enabled)
 AiPlayerbot.AutoDoQuests = 1
 
+#
+# Auto-accept every available quest from a questgiver during gossip.
+# Default 1 (on). Trade-off: faster bot leveling vs. quest-log fill.
+# Existing AiPlayerbot.DropObsoleteQuests=1 prunes outleveled quests.
+#
+AiPlayerbot.AcceptAllQuestsStrategy = 1
+
 # Quest items to keep in bots' inventories (do not destroy)
 AiPlayerbot.RandomBotQuestItems = "5175,5176,5177,5178,6948,11000,12382,13704,16309"
 
