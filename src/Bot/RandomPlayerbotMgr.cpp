@@ -1282,6 +1282,29 @@ void RandomPlayerbotMgr::CheckLfgQueue()
         }
     }
 
+    if (sPlayerbotAIConfig.lfgDungeonsAutoPopulate &&
+        LfgDungeons[TEAM_ALLIANCE].empty() && LfgDungeons[TEAM_HORDE].empty())
+    {
+        // No real players were queueing — populate the bot LFG dungeon list
+        // ourselves from the DBC. Per-bot level + role filters still apply
+        // inside LfgJoinAction::JoinLFG() so individual bots only queue for
+        // dungeons appropriate to their level.
+        for (uint32 i = 1; i < sLFGDungeonStore.GetNumRows(); ++i)
+        {
+            lfg::LFGDungeonEntry const* dungeon = sLFGDungeonStore.LookupEntry(i);
+            if (!dungeon)
+                continue;
+            if (dungeon->TypeID != lfg::LFG_TYPE_RANDOM &&
+                dungeon->TypeID != lfg::LFG_TYPE_DUNGEON &&
+                dungeon->TypeID != lfg::LFG_TYPE_HEROIC)
+                continue;
+            // Add to both factions; team-locked dungeons get filtered out by
+            // dungeon->Faction inside LFGMgr's eligibility checks downstream.
+            LfgDungeons[TEAM_ALLIANCE].push_back(dungeon->ID);
+            LfgDungeons[TEAM_HORDE].push_back(dungeon->ID);
+        }
+    }
+
     LOG_DEBUG("playerbots", "LFG Queue check finished");
 }
 

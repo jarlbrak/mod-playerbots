@@ -145,6 +145,7 @@ public:
     uint32 minRandomBotsPriceChangeInterval, maxRandomBotsPriceChangeInterval;
     uint32 disabledWithoutRealPlayerLoginDelay, disabledWithoutRealPlayerLogoutDelay;
     bool randomBotJoinLfg;
+    bool lfgDungeonsAutoPopulate;
 
     // Buff system
     // Min group size to use Greater buffs (Paladin, Mage, Druid). Default: 3
