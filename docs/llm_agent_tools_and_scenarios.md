@@ -600,6 +600,180 @@ class names. When the LLM proposes a coordinate_target intent like
 `cc_sheep`, the prompt rule "you are the only mage; sheep is your
 job" makes that proposal almost automatic.
 
+### 2.18 Contextual tool exposure
+
+The catalog has 47 active tools, but **no T2 invocation ever sees all
+47**. Tools are gated by **context flags** evaluated at digest-build
+time on the worldserver thread. Only tools whose required contexts
+are active are emitted into that invocation's tool catalog (and the
+corresponding system-prompt section). Everything else is invisible to
+the model on this call.
+
+Two reasons this matters:
+
+1. **Prompt size + model focus.** A 47-tool catalog inflates context
+   and dilutes the model's attention. A 5-8-tool catalog matched to
+   the situation steers the model toward the actually-useful action.
+2. **Validation hardening.** The model literally cannot emit a tool
+   that's not in scope. The validator already rejects out-of-context
+   calls, but never seeing them in the first place avoids wasted
+   tokens and the LLM "trying" things that won't work.
+
+**Context flags** (computed in C++ before the LLM call):
+
+```
+open_world, in_group, in_raid, in_instance, in_combat,
+at_vendor, at_repair, at_trainer, at_quest_giver, at_banker,
+at_flight_master, at_petition_vendor, at_mailbox,
+trade_window_open, loot_window_open, ready_check_pending,
+party_invite_pending, guild_invite_pending, trade_offer_pending,
+res_offer_pending, lfg_invite_pending,
+bot_alive, bot_dead, has_hearthstone_ready,
+human_in_social_range, human_chat_recent,
+is_leader, is_main_assist, has_cc_capability
+```
+
+**Context → tool visibility** (T2's exposed surface in each
+representative context — every tool also requires the implicit
+`bot_alive` unless otherwise noted):
+
+| Context | Visible T2 tools |
+| --- | --- |
+| Idle in open world, no humans nearby | `set_goal`, `abandon_current_goal`, `memory.*` (effectively T1 only — no T2 fires) |
+| Open world, near a quest giver | + `accept_quest`, `turn_in_quest`, `abandon_quest`, `list_quests_at`, `inspect_player`, `look_around` |
+| Open world, near a vendor (at_vendor) | + `vendor_junk`, `vendor_items`, `repair_gear`, `list_vendor_items` (drop the quest tools) |
+| Open world, near a trainer | + `train_class_skill`, `train_profession` |
+| Open world, human in social range / whispered | + `whisper`, `say`, `emote`, `inspect_player`, `look_around`, `memory.recall_about` |
+| In group, no instance | + `party_chat`, `invite_to_party`, `leave_party`, `accept_party_invite`, `decline_party_invite`, `assist_target` |
+| In raid, no instance | + `raid_chat`, `convert_to_raid` *(if leader)*, `set_loot_method` *(if leader)* |
+| Inside instance, in combat | + `coordinate_target`, `assist_target`, `party_chat` *or* `raid_chat` (depending on group size), `mark_target_for_group` *(if leader/assist)* |
+| Inside instance, loot_window_open | + `loot_roll` |
+| Inside instance, ready_check_pending | + `ready_check_response` |
+| Bot dead | only `release_spirit`, `accept_resurrection`, `memory.*`, `whisper` *(to ask for rez)* |
+| Trade window open | + `accept_trade`, `decline_trade` |
+| Guild charter offered | + `sign_guild_charter`, `decline_guild_invite` |
+
+`memory.*` and `set_goal` / `abandon_current_goal` are visible in
+every T2 context. Chat tools (`say`, `whisper`, `party_chat`,
+`raid_chat`, `guild_chat`, `emote`) are visible whenever the bot is
+in the corresponding channel scope — `party_chat` only when in a
+party, `raid_chat` only when in a raid, etc.
+
+**Implementation.** Each tool struct in
+`src/Bot/LlmAgent/Schemas/ToolCatalog.h` declares a static
+`RequiredContexts` mask. The agent loop:
+
+1. Builds the digest, which sets the context flags.
+2. Iterates the tool registry and selects tools whose
+   `RequiredContexts` are satisfied.
+3. Renders only those tools into the JSON-schema tool catalog the
+   model sees.
+4. Re-renders on the next invocation — context can change between
+   calls, especially in instances.
+
+**Counted out.** Static tool count: 47. Median T2 context exposure:
+~8 tools. Maximum (in-instance + leader + ready check pending + loot
+window): ~16 tools. Minimum (dead bot): 4 tools.
+
+### 2.19 Agency levels
+
+Tool gating shrinks the prompt; **agency levels** shrink the *wakeup
+rate*. Most bots in a dungeon don't need to "think" on every event —
+they have a role frame, an assist target, and a combat engine that
+knows how to play their class. The LLM should only wake when there's
+a real decision to make.
+
+Each bot has a per-context **agency level** that controls which
+triggers wake T2 on that bot. Four levels:
+
+**`passive`** — minimum-friction. T2 wakes on:
+- Direct whisper from a human, or party/raid chat that explicitly
+  names the bot ("Snarl, taunt!").
+- Loot window opens for the bot.
+- Bot dies (`release_spirit`).
+- Ready check, **only if** the bot is not in role-frame default
+  state (e.g. mana < 50% means "explain why I might decline").
+- That's it. No reaction to add spawns, boss phases, mana drops on
+  group members, or other bots' chat.
+- Combat is **entirely** role-frame + engine. `assist_target` is
+  set once at instance entry (or pre-pull) and never updated by
+  this bot's LLM.
+
+**`reactive`** — passive plus:
+- CC broken (when this bot is the CC owner).
+- Low-HP member (only if this bot is a healer or has a defensive
+  cooldown that could save them).
+- Pre-pull window (only if the bot has a class-specific CC that
+  might be needed and no one's been assigned).
+- General party_chat from humans (interpret and respond when
+  relevant; ignore filler).
+- Useful for: CC-class DPS (mage, rogue, hunter, warlock for fear),
+  off-tanks, healers in a 5-man.
+
+**`active`** — reactive plus:
+- Every pre-pull window (mark targets, set kill priority).
+- Add spawn during boss encounters.
+- Boss phase transitions.
+- Member death (group-aware decisions).
+- Useful for: main tank, raid leader's lieutenants, main assist.
+
+**`leader`** — active plus:
+- Group formation events (recruit via whisper/yell, invite, etc.).
+- Loot policy setting (`set_loot_method`).
+- Ready check initiation (after the engine has detected group
+  ready-state).
+- Useful for: bot-led pugs and raids.
+
+**Default assignment**, computed at instance entry:
+
+| Group composition signal | Default agency for this bot |
+| --- | --- |
+| Bot is group/raid leader | `leader` |
+| Bot is set as main assist | `active` |
+| Bot is tank role | `active` |
+| Bot is healer role | `reactive` |
+| Bot is CC-class DPS | `reactive` |
+| Bot is pure DPS (no CC, no off-tank) | `passive` |
+| Bot is melee DPS in a group with a real-player main tank | `passive` |
+
+This is a heuristic; the config exposes a default override
+(`AiPlayerbot.LlmAgent.DefaultDpsAgency = passive|reactive`).
+
+**Dynamic promotion.** If a human starts whispering or directly
+addressing a passive bot repeatedly (≥3 events within 60s), the bot
+is temporarily promoted to `reactive` for the duration of the
+interaction window (e.g. 5 minutes since last direct address). When
+promotion expires, the bot drops back to its default. This means a
+human player can "talk a bot up" into being more engaged without
+admin commands.
+
+**Demotion.** If the LLM endpoint times out repeatedly (≥3 timeouts
+in 5 minutes), the bot is demoted to `passive` and the role frame
++ engine carry it. Memory still writes when triggers fire; the
+visible behavior degrades gracefully rather than freezing.
+
+**Cost model.** For a 5-man pug with composition tank/healer/3 DPS
+where the leader is a human and there's one real player healer
+backup:
+
+| Bot | Default agency | T2 calls / 30-min dungeon (est.) |
+| --- | --- | --- |
+| Bot tank (active) | active | ~14 |
+| Bot healer | reactive | ~6 |
+| Bot CC-mage | reactive | ~5 |
+| Bot rogue (sap) | reactive | ~4 |
+| Bot pure-DPS warrior | passive | ~2 (loot + 1 ready check exception) |
+
+vs. all-active (the v0.0 model): ~16 × 5 = 80 calls. With agency
+levels: ~31 calls. **~60% reduction.** And the per-bot prompts are
+also smaller because contextual exposure cuts the tool count to
+~8 visible.
+
+**What about the human?** The human in the group is *always*
+treated as making decisions; the bots react to them. The
+`leader` slot only matters when no human is leading — for entirely-
+bot groups.
+
 ## 3. Chat side-effects schema (T3 output)
 
 T3 doesn't emit tool calls in the same JSON-Schema sense. Its output
@@ -1237,6 +1411,18 @@ shorter-TTL goal that needs to expire first.
 A real player **Steve** (warlock, level 19) wants to do Deadmines.
 He /who's nearby and finds level-19 bot **Snarl** (warrior).
 
+**Agency assignment** (computed at instance entry per §2.19):
+
+- **Steve** (human warlock leader) — N/A, humans don't have agency.
+- **RealPlayerHeidi** (human priest healer) — N/A.
+- **Snarl** (bot warrior tank) → `active`.
+- **Sneakypants** (bot rogue, has sap) → `reactive`.
+- **Krak'nar** (bot mage, has polymorph) → `reactive`.
+
+If the group had a fourth pure-DPS bot warrior (no CC), it would
+default to `passive` and would only wake T2 for loot decisions or
+direct whisper.
+
 **Group formation.**
 
 Steve whispers Snarl: "want to do deadmines?". Snarl's
@@ -1413,22 +1599,36 @@ T2 on each bot (on instance exit):
 2. set_goal(goal: "idle", params: {}, ttl_minutes: 5)  // back to T1 replan window
 ```
 
-**LLM call accounting.** For a ~30 minute Deadmines clear with this
-group, the LLM was invoked per bot roughly:
+**LLM call accounting** (with agency levels + contextual gating
+applied):
 
-- 1× group formation whisper / response (T2)
-- 1× say hi on entry (T2)
-- 0× ready check (engine handled)
-- 1× per pull pre-pull planning, ×8 pulls ≈ 8 (T2)
-- 0× during pulls (role frame handled)
-- 2× mid-fight mechanic reactions (T2) — add spawn, OOM call
-- 1× per loot drop, ×3 drops ≈ 3 (T2)
-- 1× exit memory write + replan (T1)
+| Event | Snarl (active) | Sneakypants (reactive) | Krak'nar (reactive) |
+| --- | --- | --- | --- |
+| Group formation whisper / accept | 2 | 1 | 1 |
+| Entry party_chat greeting | 1 | 1 | 1 |
+| Ready check (full mana) | 0 (role frame) | 0 | 0 |
+| Pre-pull planning ×8 trash pulls | 8 | ~4 (only when sap needed) | ~5 (only when poly needed) |
+| Mid-pull (role frame) | 0 | 0 | 0 |
+| Add spawn during boss | 1 | 0 | 1 (poly add) |
+| OOM call (named-in-chat, all wake) | 1 | 1 | 1 |
+| Loot rolls ×3 | 3 | 3 | 3 |
+| Exit memory + replan (T1) | 1 | 1 | 1 |
+| **Total per bot per ~30-min run** | **~17** | **~11** | **~13** |
 
-≈ **16 LLM calls per bot per dungeon**. At 3 bots in the run that's
-48 calls in 30 minutes — well within budget. If we scaled to a 25-bot
-raid the math gets larger but the role frame absorbs most of the
-mid-fight burden the same way.
+Without agency levels the same scenario would have been ~17 per bot
+× 3 bots = 51 calls. With agency levels: ~41. **Modest savings in a
+5-man with one CC class each**; the savings scale dramatically when:
+
+- Pure-DPS bots are present (passive bots → ~3-4 calls/run, not 17).
+- More than one bot of the same role exists (only one needs to be
+  active; the rest follow via role-frame).
+- A 25-bot raid: 1 leader (active) + 2 off-tanks (active) + 4
+  healers (reactive) + ~5 CC-class DPS (reactive) + ~13 pure DPS
+  (passive) → roughly 60 calls per ~30-min boss kill instead of
+  ~400.
+
+Per-bot contextual tool exposure during this scenario was also
+small: typically 7-9 tools visible, never the full 47.
 
 **Outcome.** A real player ran a dungeon with three bots that
 **coordinated** rather than just executed. The bots called out their
