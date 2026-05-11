@@ -1,7 +1,7 @@
 # LLM Agent — Tool Catalog & Worked Scenarios
 
 Companion to [`llm_agent_design.md`](./llm_agent_design.md).
-Status: **Draft v0** — for discussion.
+Status: **Draft v0.1** — for discussion.
 
 This document specifies:
 
@@ -11,11 +11,77 @@ This document specifies:
 2. **Worked scenarios** showing tool-call sequences a bot moves
    through, what triggers each one, and the resulting game-state and
    memory side-effects.
+3. The **dungeon and raid coordination layer** that lets bots play
+   instanced content with humans (kill priority, CC assignment,
+   marker placement, ready checks, loot rolls, in-fight comms).
 
 The tool catalog here is also the contract the C++ validator layer
 implements — every tool name listed below corresponds to a struct in
 `src/Bot/LlmAgent/Schemas/ToolCatalog.h` with a `Validate()` and
 `Apply()` method.
+
+## 0. Changes since v0.0
+
+Refinements driven by review of the v0.0 catalog and by adding
+first-class support for dungeon and raid play.
+
+**Catalog tightened:**
+
+- `share_quest` deferred — rare; bot can re-accept from quest giver if
+  in party.
+- `learn_recipe` deferred — validator fans out across vendor / drop /
+  trainer / quest-reward sources and adds complexity for little v0
+  payoff.
+- `kick_from_party`, `promote_to_leader`, `set_guild_motd`,
+  `invite_to_guild` deferred — leader / officer admin tools, low
+  value until bots actually lead pickups.
+- `buy_item`, `initiate_trade` deferred — engine drives purchases via
+  goal params; bot-initiated trade with humans is rare and
+  unreliable.
+- Mail / bank tools (§2.9) deferred entirely. Not on the critical
+  path for any v0 scenario.
+- `set_hearthstone` deferred — the engine picks a sensible inn during
+  questing.
+- `yell` deferred — overlaps `say` and `request_help` with worse
+  social side-effects.
+- `request_help` and `flee_combat` deferred — duplicate existing
+  rule-engine triggers; revisit when we see whether the LLM
+  consistently makes better calls than the rules.
+- `list_trainer_skills` deferred — trainer goal handler enumerates
+  available skills as part of execution; LLM rarely needs the list
+  itself.
+
+**Catalog extended (dungeon / raid):**
+
+- `coordinate_target` — unified tool for kill priority, CC assignment,
+  interrupt focus, and "do not attack" hints. Replaces three earlier
+  ideas (`set_kill_target`, `set_focus_target`, `mark_target_with_cc`).
+- `mark_target_for_group` — leader / assist places raid marker
+  visible to the whole group.
+- `ready_check_response` — accept / decline incoming ready check.
+- `loot_roll` — need / greed / pass / disenchant.
+- `release_spirit` — release after death.
+- `raid_chat` — raid-channel chat, separate from `party_chat`.
+
+**Catalog kept but adjusted:**
+
+- `convert_to_raid` kept (needed for raid scenarios; cheap).
+- `set_loot_method` kept (raid leader need it; tiny tool).
+- `assist_target` clarified: hints the engine to follow a named
+  player's target choice; combat engine resolves momentarily.
+
+**New `NewRpgInfo` variant added:** `DoRaid` (alongside `DoDungeon`).
+
+**New digest sub-block added:** `combat.*` — populated when the bot
+is in combat or inside an instance. Specifies markers, threat,
+incoming casts, low-HP members, recent party / raid chat, ready
+checks, pending loot. This is the data substrate that makes the
+dungeon coordination tools meaningful.
+
+**Tool cap relaxed.** Original target was ≤ 30. Final v0 count is
+**44 active tools** (plus a documented deferred set). The discipline
+that mattered — every tool maps to one explicit player choice — is
+preserved; the hard cap was arbitrary.
 
 ## 1. Design rules for the tool catalog
 
@@ -34,13 +100,15 @@ auditable.
    (nonexistent quest, NPC out of range, no pending invite, etc.) are
    rejected and never reach game state. Rejection returns a typed
    error the LLM can see and react to.
-4. **The catalog is small.** Target: ≤ 30 tools in v0. Add only when
-   a missing tool actually blocks a scenario in playtest, not
-   speculatively.
+4. **The catalog is small but not artificially capped.** Target:
+   ~45 tools in v0. Add only when a missing tool actually blocks a
+   scenario in playtest, not speculatively. Deferred tools are
+   documented in §0 so the decision is visible, not lost.
 5. **Tier-gated.** Each tool declares which tiers may invoke it.
-   T1 (goal-setter) sees `set_goal` and `memory.*` only; T2
-   (interactive) sees the full catalog; T3 (chat brain) sees only
-   chat side-effects via the side-effects schema, not as tool calls.
+   T1 (goal-setter) sees `set_goal`, `abandon_current_goal`, and
+   `memory.*` only; T2 (interactive) sees the full catalog; T3 (chat
+   brain) sees only chat side-effects via the side-effects schema,
+   not as tool calls.
 
 ## 2. Tool catalog (v0)
 
@@ -125,7 +193,7 @@ LLM is deciding what to do socially.
 | `accept_quest` | `quest_id: int, from_npc_guid: GUID` | NPC in range; offers this quest; bot meets level/faction/prereqs; quest log has space. |
 | `turn_in_quest` | `quest_id: int, to_npc_guid: GUID, chosen_reward_idx?: int` | NPC in range; quest is in log and complete; reward index in range. |
 | `abandon_quest` | `quest_id: int` | In quest log. Memory write captures *why* the LLM abandoned. |
-| `share_quest` | `quest_id: int, target_player: string` | Target is in party / raid; quest is shareable; target meets prereqs. |
+| ~~`share_quest`~~ *(deferred)* | `quest_id: int, target_player: string` | Defer to Phase 4+. |
 
 ### 2.4 Group tools
 
@@ -137,8 +205,8 @@ Available to **T2**.
 | `decline_party_invite` | `from: string` | Same. |
 | `invite_to_party` | `target: string` | Target exists, not already grouped, not on opposite faction. |
 | `leave_party` | — | Bot is in a party. |
-| `kick_from_party` | `target: string` | Bot is leader; target is in group. |
-| `promote_to_leader` | `target: string` | Bot is leader; target is in group. |
+| ~~`kick_from_party`~~ *(deferred)* | `target: string` | Phase 4+. |
+| ~~`promote_to_leader`~~ *(deferred)* | `target: string` | Phase 4+. |
 | `convert_to_raid` | — | Bot is leader; party not already raid. |
 | `set_loot_method` | `method: "ffa"\|"round_robin"\|"master"\|"group"\|"need_before_greed"` | Bot is leader. |
 
@@ -154,8 +222,8 @@ the engine handles the mechanics for the intermediate steps.
 | `decline_guild_invite` | `from: string` | Same. |
 | `leave_guild` | — | Bot is in a guild. |
 | `sign_guild_charter` | `petitioner: string` | A charter is offered by `petitioner` and bot is at the petition vendor / petitioner. |
-| `invite_to_guild` | `target: string` | Bot has guild invite permission; target is unguilded. |
-| `set_guild_motd` | `text: string` | Bot has officer permission. Text length-capped. |
+| ~~`invite_to_guild`~~ *(deferred)* | `target: string` | Phase 4+. |
+| ~~`set_guild_motd`~~ *(deferred)* | `text: string` | Phase 4+. |
 
 ### 2.6 LFG / queue tools
 
@@ -177,10 +245,10 @@ Available to **T2**.
 | `vendor_junk` | `vendor_npc_guid: GUID` | Vendor in range; sells. |
 | `vendor_items` | `vendor_npc_guid: GUID, item_ids: [int]` | Vendor in range; items in bags; items are sellable. |
 | `repair_gear` | `vendor_npc_guid: GUID, mode: "all"\|"equipped"` | Vendor is a repair vendor; bot has gold. |
-| `buy_item` | `vendor_npc_guid: GUID, item_id: int, quantity: int` | Vendor sells item; bot has gold; bag space. |
+| ~~`buy_item`~~ *(deferred)* | `vendor_npc_guid: GUID, item_id: int, quantity: int` | Engine handles via goal params. Phase 4+. |
 | `accept_trade` | — | A trade window is open. |
 | `decline_trade` | — | Same. |
-| `initiate_trade` | `target: string, offered_items: [{item_id, count}], offered_gold: int` | Target in range; items in bags; gold available. |
+| ~~`initiate_trade`~~ *(deferred)* | `target: string, offered_items: [...], offered_gold: int` | Phase 4+. |
 
 ### 2.8 Training tools
 
@@ -190,20 +258,15 @@ Available to **T2**.
 | --- | --- | --- |
 | `train_class_skill` | `trainer_npc_guid: GUID, spell_id: int` | Trainer teaches; bot eligible; has gold. |
 | `train_profession` | `trainer_npc_guid: GUID, profession: enum` | Trainer teaches profession; bot has room for another profession if first time. |
-| `learn_recipe` | `vendor_or_drop_item: int` | Recipe is in bags or vendor sells it; bot has the matching profession. |
+| ~~`learn_recipe`~~ *(deferred)* | `vendor_or_drop_item: int` | Validator complexity outpaces v0 value. Phase 4+. |
 
-### 2.9 Mail / bank tools
+### 2.9 Mail / bank tools *(entirely deferred — Phase 4+)*
 
-Available to **T2**. Low priority for v0 — present in the schema so
-existing rule-engine functionality is reachable from the LLM but rarely
-exercised.
-
-| Tool | Params | Validators |
-| --- | --- | --- |
-| `deposit_to_bank` | `banker_npc_guid: GUID, items: [int]` | Banker in range; items in bags; bank space. |
-| `withdraw_from_bank` | `banker_npc_guid: GUID, items: [int]` | Banker in range; items in bank; bag space. |
-| `check_mail` | `mailbox_guid: GUID` | Mailbox in range. |
-| `collect_mail_attachment` | `mail_id: int` | Mail belongs to bot; has attachment; bag/inventory space. |
+`deposit_to_bank`, `withdraw_from_bank`, `check_mail`, and
+`collect_mail_attachment` were enumerated in v0.0 but are not on the
+critical path for any v0 scenario. The engine handles routine bank
+deposits as part of `vendor_run` execution. Reintroduce when there's
+a playtest scenario that needs them.
 
 ### 2.10 Travel tools
 
@@ -214,7 +277,7 @@ hearthstone and stuck-recovery cases.
 | Tool | Params | Validators |
 | --- | --- | --- |
 | `use_hearthstone` | — | Off cooldown; bot has hearthstone. |
-| `set_hearthstone` | `inn_npc_guid: GUID` | Inn is binder; in range. |
+| ~~`set_hearthstone`~~ *(deferred)* | `inn_npc_guid: GUID` | Engine picks during questing. Phase 4+. |
 
 ### 2.11 Chat tools
 
@@ -229,9 +292,10 @@ emit additional `side_effects` that are applied alongside.
 | `say` | `text_hint: string` | Local /say channel. T3-refined. |
 | `whisper` | `target: string, text_hint: string` | Direct message. T3-refined. |
 | `party_chat` | `text_hint: string` | Party channel. T3-refined. |
+| `raid_chat` | `text_hint: string` | Raid channel. T3-refined. Used inside raid groups. |
 | `guild_chat` | `text_hint: string` | Guild channel. T3-refined. |
-| `yell` | `text_hint: string` | Wide-radius /yell, rate-limited globally per bot (≤1/min). |
-| `emote` | `name: string, target?: string` | Mechanical emote (`/wave`, `/dance`, `/bow`). Closed-set name. |
+| ~~`yell`~~ *(deferred)* | `text_hint: string` | Phase 4+. Overlaps `say` with worse social side-effects. |
+| `emote` | `name: string, target?: string` | Mechanical emote (`/wave`, `/dance`, `/bow`, `/ready`, `/follow`). Closed-set name. |
 
 ### 2.12 Inspection tools (read-only intel)
 
@@ -245,7 +309,7 @@ decide based on data not in the digest. Cheap; no validator beyond
 | `look_around` | `radius_yards: int [10, 60]` | `{players: [...], npcs: [...], objects: [...]}` |
 | `list_quests_at` | `npc_guid: GUID` | `[{quest_id, title, level, type}]` for NPC's offered quests + completable ones. |
 | `list_vendor_items` | `vendor_npc_guid: GUID, filter?: string` | `[{item_id, name, price_copper}]` |
-| `list_trainer_skills` | `trainer_npc_guid: GUID` | `[{spell_id, name, cost, rank}]` |
+| ~~`list_trainer_skills`~~ *(deferred)* | `trainer_npc_guid: GUID` | Trainer goal handler enumerates. Phase 4+. |
 
 ### 2.13 Combat / strategic tools
 
@@ -255,16 +319,286 @@ human makes mid-combat that aren't twitch reflex.
 
 | Tool | Params | Notes |
 | --- | --- | --- |
-| `flee_combat` | `reason: string` | Bot disengages and runs. Memory writes the reason. |
-| `request_help` | `channel: "party"\|"yell"\|"whisper", target?: string` | Routes to chat tools with a "help" intent. |
-| `assist_target` | `target: string` | Bot focuses target's target. |
+| ~~`flee_combat`~~ *(deferred)* | `reason: string` | Existing rule-engine triggers cover this. Phase 4+. |
+| ~~`request_help`~~ *(deferred)* | `channel, target?` | Use `party_chat` / `whisper` with a clear text hint. Phase 4+. |
+| `assist_target` | `target: string` | Bot follows named player's current target (continuously while in TTL). |
 | `accept_resurrection` | — | A rez offer is pending. |
 
-### 2.14 Tool summary
+### 2.14 Dungeon & raid coordination tools
 
-26 tools in v0, plus 4 memory tools = **30 total**. T1 sees only
-`set_goal`, `abandon_current_goal`, and the 4 memory tools (6 tools).
-T2 sees all 30. T3 emits the chat side-effects schema, not tool calls.
+Available to **T2** when the bot is in combat or inside an instance.
+These are the headline addition in v0.1: they let the LLM make
+**target decisions** during dungeon and raid encounters while combat
+rotations stay on the engine. Each tool writes per-bot state that the
+existing combat strategies consult; the engine retains the final say
+when LLM hints become invalid (target dies, falls out of range,
+breaks CC, etc.).
+
+| Tool | Params | Validators | Effect |
+| --- | --- | --- | --- |
+| `coordinate_target` | `target_guid: GUID, intent: CombatIntent, ttl_seconds: int [5, 60]` | Target in combat scope (visible / in same encounter); bot in or entering combat. | Writes `combatHints[target_guid] = {intent, expires_at}` on this bot. The combat target-selector consults the hint before its default heuristic. |
+| `mark_target_for_group` | `target_guid: GUID, marker: RaidMarker` | Bot is leader **or** is set as main assist; target in scope. | Sends the raid-marker packet; visible to entire party / raid. |
+| `assist_target` *(reused from §2.13)* | `target_player: string, ttl_seconds: int [10, 120]` | Target in group. | Bot follows that player's current target until TTL expires. Cheap way to "main-assist." |
+| `ready_check_response` | `ready: bool` | A ready check is pending. | Replies to leader. Memory write captures "not ready because mana low" etc. when `ready=false`. |
+| `loot_roll` | `roll_id: int, choice: LootChoice` | Roll window open for this `roll_id`. | Submits roll. |
+| `release_spirit` | — | Bot is dead. | Releases to graveyard. Engine handles corpse run after. |
+
+`CombatIntent`:
+
+```
+"kill_first" | "kill_second" | "kill_third"
+| "do_not_attack"
+| "cc_sheep" | "cc_sap" | "cc_hex" | "cc_freeze" | "cc_banish" | "cc_fear"
+| "interrupt"
+| "keep_safe"   // don't AOE near this; preserves nearby CC
+```
+
+`RaidMarker`: `"star" | "circle" | "diamond" | "triangle" | "moon" | "square" | "cross" | "skull"`.
+
+`LootChoice`: `"need" | "greed" | "pass" | "disenchant"`.
+
+**How `coordinate_target` interacts with the combat engine.**
+PlayerbotAI grows a `combatHints: std::map<ObjectGuid, CombatHint>`
+field. The existing combat target-selector (used by class strategies
+like `DpsAssistStrategy`) is modified to consult this map *first*:
+
+1. If a hint with `intent == "kill_first"` exists and the target is
+   alive and reachable, prefer it.
+2. Else if a hint with `"kill_second"`/`"kill_third"` exists, fall
+   through to the next priority.
+3. `"do_not_attack"` removes the target from the candidate set.
+4. `"cc_sheep"` / `"cc_sap"` / etc. tag the target as the bot's own
+   CC responsibility — class-specific CC actions read this; AOE
+   actions skip it.
+5. `"interrupt"` raises the interrupt priority of this caster in the
+   interrupt strategy.
+6. `"keep_safe"` suppresses AOE within a small radius.
+
+Hints expire after their TTL or when the target dies / despawns.
+The engine never blocks on the LLM; if no valid hint exists, it uses
+its own logic exactly as today. This means a bot with the LLM
+disabled, or a bot whose latest LLM call is still in flight, just
+behaves like a current-style playerbot — preserving the strict
+additive-only design rule.
+
+**Marker placement is leader/assist-only.** Non-leader bots calling
+`mark_target_for_group` fail validation; they can still emit
+`coordinate_target` for their own kill priority. To express *group*
+intent, non-leader bots use `party_chat` ("skull the mage") and the
+human leader (or another leader-capable bot) interprets and places
+the marker.
+
+**Assist mode shortcut.** `assist_target("TankName", ttl=120)` is the
+"hold /assist" equivalent. Under the hood it sets a continuous hint
+that whatever `TankName` is currently targeting gets
+`intent="kill_first"` for this bot's combat selector. The TTL
+prevents stale assist after group changes.
+
+### 2.15 In-instance digest fields
+
+When the bot is in combat or inside an instance, T0 emits a
+`combat` block alongside the existing top-level fields. It is
+refreshed cheaply (read-only world state) and feeds T2 with the
+context dungeon/raid decisions need.
+
+```json
+{
+  "combat": {
+    "in_combat": true,
+    "in_instance": true,
+    "instance": {
+      "id": 36, "name": "Deadmines", "type": "5man_dungeon",
+      "completed_bosses": ["Rhahk'Zor", "Sneed's Shredder"],
+      "remaining_bosses": ["Mr. Smite", "Captain Greenskin", "Edwin VanCleef"]
+    },
+    "current_encounter": {
+      "name": "Edwin VanCleef",
+      "phase": "phase2",
+      "phase_progress_hint": "Captain and 4 adds spawn at 75% / 50% / 25%"
+    },
+    "group": [
+      {"name": "RealPlayerSteve", "class": "warlock", "role": "dps",
+       "hp_pct": 88, "mana_pct": 60, "threat_rank": 3, "is_leader": true,
+       "is_bot": false, "main_assist": true},
+      {"name": "RealPlayerHeidi", "class": "priest", "role": "healer",
+       "hp_pct": 72, "mana_pct": 41, "threat_rank": 5, "is_bot": false},
+      {"name": "Snarl", "class": "warrior", "role": "tank",
+       "hp_pct": 95, "mana_pct": null, "threat_rank": 1, "is_bot": true},
+      {"name": "Sneakypants", "class": "rogue", "role": "dps",
+       "hp_pct": 100, "mana_pct": null, "threat_rank": 2, "is_bot": true},
+      {"name": "self", "class": "mage", "role": "dps",
+       "hp_pct": 100, "mana_pct": 78, "threat_rank": 4}
+    ],
+    "raid_markers": [
+      {"target_name": "Defias Strip Miner", "guid": "...", "marker": "skull"},
+      {"target_name": "Defias Magician",    "guid": "...", "marker": "moon"}
+    ],
+    "your_combat_hints": [
+      {"target_name": "Defias Strip Miner", "intent": "kill_first", "ttl_s": 22}
+    ],
+    "incoming_threats": [
+      {"caster_name": "Defias Magician", "spell": "Frostbolt",
+       "target": "RealPlayerHeidi", "cast_time_left_ms": 1500}
+    ],
+    "low_hp_members": [
+      {"name": "RealPlayerHeidi", "hp_pct": 35}
+    ],
+    "recent_party_chat": [
+      {"from": "RealPlayerSteve", "text": "skull on mage, sheep the patrol", "channel": "party", "age_s": 5},
+      {"from": "RealPlayerHeidi", "text": "low mana, drinking after this pull", "channel": "party", "age_s": 3}
+    ],
+    "ready_check_pending": null,
+    "loot_pending": [
+      {"roll_id": 9123, "item_id": 4791, "item_name": "Defias Renegade Gloves",
+       "item_type": "armor", "armor_type": "mail",
+       "stats_summary": "+5 str, +5 sta", "is_upgrade_for_self": false}
+    ]
+  }
+}
+```
+
+**T2 wakeup triggers inside instances:**
+
+- Entered instance (party-formation digest).
+- Pre-pull window (engine signals "tank ready, group waiting >2s").
+- Boss engaged / boss phase transitioned.
+- Member HP drops below 40%.
+- Add spawned during a boss encounter (`encounter.add_spawn` event).
+- CC broken (bot is the CC owner per `your_combat_hints`).
+- Member died.
+- Ready check received (`ready_check_pending != null`).
+- Loot window opened (`loot_pending != null`).
+- Party/raid chat received from a non-bot member.
+- Bot died (after rule-engine has already updated state).
+
+Each trigger fires at most once per N seconds per bot to bound LLM
+load even during chaotic pulls. Pre-pull is the most common wakeup
+and is what makes the coordination feel deliberate; mid-pull
+triggers are reserved for genuine state changes the engine can't
+handle alone.
+
+### 2.16 Tool summary
+
+| Category | Active in v0 | Deferred |
+| --- | --- | --- |
+| Memory | 4 | — |
+| Goal management | 2 | — |
+| Quest | 3 | 1 (`share_quest`) |
+| Group | 5 | 2 (`kick_from_party`, `promote_to_leader`) |
+| Guild | 4 | 2 (`invite_to_guild`, `set_guild_motd`) |
+| LFG / queue | 3 | — |
+| Trade / vendor | 5 | 2 (`buy_item`, `initiate_trade`) |
+| Training | 2 | 1 (`learn_recipe`) |
+| Mail / bank | 0 | 4 (entire category) |
+| Travel | 1 | 1 (`set_hearthstone`) |
+| Chat | 6 | 1 (`yell`) |
+| Inspection | 4 | 1 (`list_trainer_skills`) |
+| Combat / strategic | 2 | 2 (`flee_combat`, `request_help`) |
+| Dungeon / raid coordination | 6 | — |
+| **Total** | **47** | **17** |
+
+T1 sees 6 tools: `set_goal`, `abandon_current_goal`, and the 4
+`memory.*` tools. T2 sees all 47. T3 emits chat side-effects only.
+
+### 2.17 Role frames
+
+Bots inside instances act on a **role frame** — a fixed set of
+default behaviors associated with their party role. The frame runs
+in the combat engine *without an LLM call*. The LLM is only invoked
+when a situation diverges from the default and needs a real decision
+(boss phase change, mechanics, an unusual pull, a human's request
+that contradicts the role default).
+
+This is the single biggest cost-saver inside dungeons. A typical
+trash pull is fully handled by the role frame: no LLM call,
+no `coordinate_target` issued, just the engine following the
+assigned role. The LLM wakes for: pre-pull planning, mechanics,
+loot, ready checks, and party_chat from humans.
+
+Each role frame is encoded twice:
+
+1. **In the combat target-selector** (C++): the deterministic
+   priority list the bot uses when no `combatHints` apply.
+2. **In the T2 system prompt** (LLM): the verbal description of
+   what the role is supposed to do, so when the LLM *is* called, it
+   reasons in role-aware terms ("I'm the off-tank, I should pick up
+   adds even if they're not skulled").
+
+The two encodings are kept in sync — the prompt text is literally
+generated from the same constants the engine consults.
+
+**Tank frame:**
+
+- Default kill target: highest-threat enemy in melee, or the
+  raid-marked "skull" if present.
+- Aggro priority: any enemy in combat with a healer or non-tank
+  group member gets *taunt* priority (existing engine action).
+- Positioning: face boss away from group; keep adds clustered.
+- Wakeup on LLM: pre-pull (signal ready), add spawn during boss
+  fight (decide priority), tank-swap-eligible debuff applied.
+- Default party_chat templates: "pulling", "incoming", "swap" —
+  the engine can emit these without an LLM call when state
+  matches.
+
+**Healer frame:**
+
+- Default heal priority: tank > self > group ordered by HP%.
+- Mana management: drink when out of combat and mana < 30%;
+  request a pause via `party_chat` if mid-pull and mana < 15%.
+- Dispel: dispel any debuff on group members the bot's class can
+  remove (existing engine action).
+- Wakeup on LLM: any group member below 40% HP for >3s,
+  boss phase change, ready check, drink-required pause.
+
+**Melee DPS frame:**
+
+- Default kill target: whatever `assist_target` points at; else
+  the tank's current target; else the lowest-HP engaged enemy
+  (focus fire).
+- Never attack a target hinted `do_not_attack` or `cc_*`.
+- Position behind target when possible (engine-level).
+- Wakeup on LLM: pre-pull (set kill priority if no marker),
+  CC broken (bot was responsible), boss phase change, loot.
+
+**Ranged DPS frame:**
+
+- Default kill target: same priority as melee.
+- Default positioning: at max range from target; spread from
+  other ranged for AOE-vulnerability bosses.
+- Interrupt enemy casters when off-cooldown if no
+  `coordinate_target` hint says otherwise.
+- Wakeup on LLM: same as melee, plus "move out of fire"
+  mechanic triggers.
+
+**CC class frame** (overlays the DPS frame for hunters, mages,
+warlocks, rogues, priests, druids):
+
+- If a `coordinate_target` with `intent="cc_*"` is set on a
+  target this bot's class can CC, maintain that CC. Re-apply
+  when it breaks if the CC owner hint is still active.
+- Never AOE within 8 yards of a `cc_*` target unless a
+  `keep_safe`-clearing event fired.
+- Wakeup on LLM: CC broken; new pull where CC may be needed.
+
+**Caster (mana) shared behavior** (overlays all caster roles):
+
+- Drink when out of combat, mana < 30%, and the next pull is
+  not imminent (per the pre-pull window signal). Communicate
+  via `party_chat` if drinking would hold up the group.
+
+The frame is selected at instance entry based on the bot's class +
+spec + the role declared in `set_goal(do_dungeon, role=...)`. Role
+is fixed for the duration of the instance (an LLM-driven role swap
+would require leaving combat and a re-plan — not a v0 feature).
+
+**Group composition awareness.** The T2 system prompt for in-instance
+agents includes a one-line summary of the group: `"You are the
+ranged DPS mage. Tank: Snarl (warrior). Healer: RealPlayerHeidi
+(priest). Other DPS: Sneakypants (rogue, melee)."` This lets the LLM
+reason about who is responsible for what without inferring from raw
+class names. When the LLM proposes a coordinate_target intent like
+`cc_sheep`, the prompt rule "you are the only mage; sheep is your
+job" makes that proposal almost automatic.
 
 ## 3. Chat side-effects schema (T3 output)
 
@@ -297,9 +631,13 @@ the actions that make sense to commit in the same breath as speech:
 `set_goal`, `abandon_current_goal`, `accept_party_invite`,
 `decline_party_invite`, `accept_guild_invite`, `decline_guild_invite`,
 `accept_trade`, `decline_trade`, `accept_lfg_invite`, `emote`,
-`memory.remember`. All other actions must be set up by T2 itself —
-T3 isn't allowed to start a dungeon queue or sign a guild charter as
-a side effect of a sentence.
+`memory.remember`, plus the in-instance coordination tools
+`coordinate_target`, `ready_check_response`, `loot_roll`, and
+`assist_target`. The in-instance additions matter because in dungeons
+a single utterance — "skull on the mage, sheep the patrol" —
+naturally commits both speech and combat hints. All other actions
+must be set up by T2 itself — T3 isn't allowed to start a dungeon
+queue or sign a guild charter as a side effect of a sentence.
 
 The grammar enforces this restriction. Every side-effect is validated
 through the same C++ validator as the parent tool.
@@ -310,9 +648,29 @@ To support T1 goals beyond the current set, v0 adds the following
 variants to `src/Ai/World/Rpg/NewRpgInfo.h`:
 
 ```cpp
-struct DoDungeon { uint32 dungeonId{0}; uint8 role{0}; uint32 state{0}; };
-struct VendorRun { ObjectGuid vendor{}; bool sellJunk{true}; bool repair{true}; bool depositBank{false}; };
-struct TrainSkills { ObjectGuid trainer{}; bool classSkills{true}; bool professions{false}; };
+enum class GroupRole : uint8 { Tank = 0, Healer = 1, MeleeDps = 2, RangedDps = 3 };
+
+struct DoDungeon {
+    uint32 dungeonId{0};
+    GroupRole role{GroupRole::MeleeDps};
+    uint32 state{0};           // sub-state machine: SEEKING_GROUP / QUEUED / TRAVELLING / INSIDE / FINISHED
+};
+struct DoRaid {
+    uint32 raidId{0};
+    GroupRole role{GroupRole::MeleeDps};
+    uint32 state{0};
+};
+struct VendorRun {
+    ObjectGuid vendor{};
+    bool sellJunk{true};
+    bool repair{true};
+    bool depositBank{false};
+};
+struct TrainSkills {
+    ObjectGuid trainer{};
+    bool classSkills{true};
+    bool professions{false};
+};
 struct GuildBusiness {
     enum Action { FIND, JOIN, FOUND_CHARTER, SIGN_CHARTER, ADMIN } action;
     ObjectGuid::LowType counterparty{0};
@@ -321,10 +679,15 @@ struct GuildBusiness {
 
 Each new variant gets a matching `ChangeTo*` method and a handler in
 `NewRpgAction` that drives the bot through the multi-step mechanics
-(queue → travel → enter for `DoDungeon`; pathfind → vendor → repair →
-deposit for `VendorRun`; etc.). The handlers exist already in spirit
-across the existing `Action` registry — this work mostly composes
-them.
+(queue → travel → enter → execute → exit for `DoDungeon` and
+`DoRaid`; pathfind → vendor → repair → deposit for `VendorRun`;
+etc.). The handlers exist already in spirit across the existing
+`Action` registry — this work mostly composes them.
+
+`DoDungeon` and `DoRaid` are *long-lived* goals: they last the entire
+instance run. They do not get suspended by the resume stack (§6) —
+once inside an instance, the bot stays committed until the run ends
+or the group disbands. T1 is only re-invoked on exit.
 
 This is the single biggest piece of net-new C++ work outside the LLM
 client itself. It is intentionally separated from the LLM integration
@@ -869,6 +1232,399 @@ shorter-TTL goal that needs to expire first.
 **Outcome.** Deterministic priority: combat > T2 (human-facing) > T1
 (background) > bot-to-bot chat. Within each priority tier, FIFO.
 
+### Scenario K — Human pugs Deadmines with three bots (the headline)
+
+A real player **Steve** (warlock, level 19) wants to do Deadmines.
+He /who's nearby and finds level-19 bot **Snarl** (warrior).
+
+**Group formation.**
+
+Steve whispers Snarl: "want to do deadmines?". Snarl's
+`HumanChatTrigger` fires.
+
+```
+T2 on Snarl:
+1. inspect_player("Steve") -> warlock, lvl 19
+2. memory.recall_about(entity={name:"Steve", type:"player"}, max_hops:2)
+   -> 0 memories
+3. whisper("Steve", text_hint: "yes, willing to tank")
+   // T3 utterance: "sure, i can tank if you want — lvl 19 warrior"
+   // T3 side_effects: [
+   //   { type: "set_goal", goal: "do_dungeon",
+   //     params: {dungeon_id: 36, role: "tank"}, ttl_minutes: 120 }
+   // ]
+```
+
+Steve also pulls in real player healer **Heidi** and two more bot DPS
+(rogue **Sneakypants**, mage **Krak'nar**). Invites go out. Each bot:
+
+```
+T2 on Snarl / Sneakypants / Krak'nar (in parallel, on each bot's tick):
+1. accept_party_invite(from: "Steve")
+2. party_chat(text_hint: "say hi, mention role")
+   // T3 utterances (per bot):
+   //   Snarl: "hi all, warrior tank here"
+   //   Sneakypants: "sup, rogue dps, can sap"
+   //   Krak'nar: "hi! mage dps, polymorph available"
+3. memory.remember(text: "Joined Steve's DM pug...", salience: 0.4)
+```
+
+Note Sneakypants and Krak'nar **volunteered their CC capabilities** —
+that's role-frame awareness in the system prompt ("you have sap /
+polymorph available, mention it on group formation").
+
+**Travel.** Engine drives travel to the instance entrance (existing
+pathing).
+
+**Entry + ready check.** Steve runs a ready check.
+
+```
+T2 on each bot (ready_check_pending != null trigger):
+1. ready_check_response(ready: true)
+```
+
+These three calls are nearly identical and could even skip the LLM —
+the role frame says "ready check at full HP/mana = accept" and the
+engine emits the response without bothering T2. The LLM only wakes
+on the ready check if the bot is out of mana or mid-drink.
+
+**First pull.** Steve in party chat: `"skull on the mage, sheep the patrol"`.
+
+This is a `recent_party_chat` digest delta, which wakes T2 on every
+bot at once.
+
+```
+T2 on Snarl (tank, role frame says he's the puller):
+1. coordinate_target(<Defias_Magician_guid>, intent: "kill_first", ttl_seconds: 60)
+2. coordinate_target(<Defias_Patrol_guid>,    intent: "do_not_attack", ttl_seconds: 60)
+3. mark_target_for_group(<Defias_Magician_guid>, marker: "skull")
+4. mark_target_for_group(<Defias_Patrol_guid>,   marker: "moon")
+5. party_chat(text_hint: "pulling skull, sheep moon")
+   // T3 utterance: "incoming. skull first, leave moon"
+
+T2 on Krak'nar (mage with polymorph — role frame says CC is his job):
+1. coordinate_target(<Defias_Patrol_guid>,    intent: "cc_sheep", ttl_seconds: 60)
+2. coordinate_target(<Defias_Magician_guid>, intent: "kill_first", ttl_seconds: 60)
+3. party_chat(text_hint: "got the sheep")
+   // T3: "sheep on moon"
+
+T2 on Sneakypants (rogue dps):
+1. coordinate_target(<Defias_Magician_guid>, intent: "kill_first", ttl_seconds: 60)
+   // role frame already follows tank/assist; coordinate_target just
+   // confirms and locks it in for the pull
+```
+
+**Pull executes — no further LLM calls.** Combat rotations run on the
+engine. The combat target-selector reads `combatHints` and the role
+frame. Snarl pulls, holds aggro. Krak'nar polymorphs the patrol when
+it walks in. Sneakypants ambushes the magician. Heidi heals.
+
+Pull ends. **No mid-pull LLM calls needed** — that's the role-frame
++ coordinate-target design working as intended.
+
+**Add spawn mid-pull (if it happens).** An extra mob aggros from a
+side door.
+
+```
+T2 on Snarl (add_spawn trigger):
+1. coordinate_target(<Add_guid>, intent: "kill_second", ttl_seconds: 30)
+   // engine taunts and picks it up
+```
+
+Tank's `kill_second` hint plus the tank role frame is enough for the
+DPS bots to read the digest update and naturally focus the add after
+the primary kill — no extra LLM call needed on them.
+
+**Loot.** Drop: *Defias Renegade Gloves* (mail, +str +sta). Loot
+window opens on each bot.
+
+```
+T2 on Snarl (warrior — mail fits, stats fit):
+1. loot_roll(roll_id, choice: "need")
+2. party_chat(text_hint: "thanks for need")
+   // T3: "ty :)"
+
+T2 on Sneakypants (rogue — leather class, can't equip mail):
+1. loot_roll(roll_id, choice: "greed")
+
+T2 on Krak'nar (mage — can't wear mail):
+1. loot_roll(roll_id, choice: "greed")
+```
+
+The need/greed/pass decision is a class+stat check the LLM does
+explicitly. The role frame doesn't auto-decide here because loot
+choices are socially meaningful (people resent need-rolling outside
+their class).
+
+**Boss pull (VanCleef).** Boss-engaged trigger fires.
+
+```
+T2 on Snarl:
+1. coordinate_target(<VanCleef_guid>, intent: "kill_first", ttl_seconds: 60)
+2. mark_target_for_group(<VanCleef_guid>, marker: "skull")
+3. party_chat(text_hint: "pulling vc, adds come at 75/50/25 — collect them on me")
+   // T3 incorporates memory hint about VanCleef adds (from a prior run)
+```
+
+Phase 2 (adds spawn) trigger fires.
+
+```
+T2 on Krak'nar (mage with poly):
+1. coordinate_target(<Add_1_guid>, intent: "cc_sheep", ttl_seconds: 30)
+
+T2 on Sneakypants (rogue):
+1. coordinate_target(<Add_2_guid>, intent: "kill_first", ttl_seconds: 30)
+   // tank's job is to peel; sneak's job is to burst the unCCed add
+```
+
+**Mid-fight comms.** Heidi: `"oom drinking"` — a deliberate slowdown
+request.
+
+```
+T2 on Snarl (tank, hears OOM call):
+1. coordinate_target(<VanCleef_guid>, intent: "kill_third", ttl_seconds: 15)
+   // intentionally throttle dps via tank's primary target priority
+2. party_chat(text_hint: "throttling, drink up")
+   // T3: "easing off — drink up"
+```
+
+The other DPS bots see the digest update (`your_combat_hints` shows
+`kill_third` instead of `kill_first` on VanCleef) and their role
+frame translates: lower priority = throttle. No additional LLM call
+needed for them.
+
+Heidi drinks, mana restored. Snarl re-issues kill_first:
+
+```
+T2 on Snarl (after Heidi's "ok ready" or mana_pct > 80 trigger):
+1. coordinate_target(<VanCleef_guid>, intent: "kill_first", ttl_seconds: 60)
+2. party_chat(text_hint: "back on him")
+```
+
+**Boss dies.** Loot, rolls as before. Run ends. Group leaves.
+
+```
+T2 on each bot (on instance exit):
+1. memory.remember(
+     text: "Completed Deadmines pug with Steve, Heidi, Sneakypants, Krak'nar — good group.",
+     entities: [each player, "Deadmines"],
+     relations: [(self, completed, Deadmines), (self, ran_dungeon_with, each_player)],
+     salience: 0.6)
+2. set_goal(goal: "idle", params: {}, ttl_minutes: 5)  // back to T1 replan window
+```
+
+**LLM call accounting.** For a ~30 minute Deadmines clear with this
+group, the LLM was invoked per bot roughly:
+
+- 1× group formation whisper / response (T2)
+- 1× say hi on entry (T2)
+- 0× ready check (engine handled)
+- 1× per pull pre-pull planning, ×8 pulls ≈ 8 (T2)
+- 0× during pulls (role frame handled)
+- 2× mid-fight mechanic reactions (T2) — add spawn, OOM call
+- 1× per loot drop, ×3 drops ≈ 3 (T2)
+- 1× exit memory write + replan (T1)
+
+≈ **16 LLM calls per bot per dungeon**. At 3 bots in the run that's
+48 calls in 30 minutes — well within budget. If we scaled to a 25-bot
+raid the math gets larger but the role frame absorbs most of the
+mid-fight burden the same way.
+
+**Outcome.** A real player ran a dungeon with three bots that
+**coordinated** rather than just executed. The bots called out their
+own CC, responded to a human's pull markup, throttled dps for a
+mana break, and rolled appropriately on loot. Memories persist so
+future runs with the same humans recall the relationship.
+
+### Scenario L — Bot leads a pug raid (ZG, role-aware recruitment)
+
+A level-60 protection warrior bot **Borgun** has a high
+`ran_dungeon_with` relationship count from many prior runs. T1 fires.
+
+```
+T1 on Borgun:
+1. set_goal(goal: "do_raid", params: {raid_id: 309 /* Zul'Gurub */, role: "tank"},
+            ttl_minutes: 180,
+            reasoning: "Lvl 60 raid-geared, many positive memories with potential members; time to lead.")
+```
+
+Engine starts a recruitment phase under `DoRaid.state = SEEKING_GROUP`.
+The bot yells `/4 LFM ZG tank lf 9 more, exp/casual mix ok`, then
+whispers each of its top-recall raid-eligible memories.
+
+A real player **MaceyJ** whispers back. Borgun's T2 fires.
+
+```
+T2 on Borgun:
+1. memory.recall_about(entity={name:"MaceyJ", type:"player"}, max_hops:2)
+   -> 3 memories, all positive (BRD, LBRS, UBRS)
+2. inspect_player("MaceyJ") -> priest, lvl 60, holy spec, guild "Trees"
+3. whisper("MaceyJ", text_hint: "yes, healing slot open, remember BRD run? still happy to have you")
+   // T3: "macey! yeah heal slot — that BRD run was great, want in?"
+4. invite_to_party("MaceyJ")
+```
+
+More slots fill. After 5 members, T2:
+
+```
+5. convert_to_raid()
+6. set_loot_method("master")
+```
+
+After 10 members, `DoRaid.state` advances to `TRAVELLING`. Engine
+travels everyone (existing mass-travel handling). At entry:
+
+```
+T2 on Borgun (ready_check_pending trigger):
+1. ready_check_response(ready: true)
+```
+
+But three other bots respond `ready: false` because mana < 30%.
+Borgun's T2 wakes again on the failure:
+
+```
+2. raid_chat(text_hint: "hold for 30s — 3 not ready")
+   // T3: "30s — letting the casters top off"
+```
+
+After 30s, Borgun's T2 re-issues a ready check. Now everyone is
+ready, raid proceeds.
+
+**First pull.** Borgun has the tank role frame. He pulls without an
+LLM call. The CC-class bots wake T2 to assign their own CC:
+
+```
+T2 on a hunter bot (range frame, has Freezing Trap):
+1. coordinate_target(<Bloodlord_Add_guid>, intent: "cc_freeze", ttl_seconds: 90)
+2. raid_chat(text_hint: "trap on the right add")
+```
+
+This is **role-frame-driven self-assignment** — no leader needed to
+say "hunter trap the add"; the hunter knows that's the hunter's job.
+For boss adds the *leader* (Borgun) might still call assignments
+when memory says this raid has multiple CC classes that might
+collide. In that case Borgun's T2 marks specifically:
+
+```
+T2 on Borgun (boss adds incoming, multi-CC available):
+1. mark_target_for_group(<Add_1_guid>, marker: "moon")  // hunter trap
+2. mark_target_for_group(<Add_2_guid>, marker: "square") // mage sheep
+3. raid_chat(text_hint: "moon trap, square sheep")
+```
+
+The mage and hunter bots see their respective markers + the chat,
+and the role-frame interprets — `moon = trap me, square = sheep me`
+is a convention encoded in the role-frame prompt.
+
+**Outcome.** A bot-led raid that uses memory to assemble the group,
+declares loot rules, runs ready checks, calls CC by raid-marker
+convention, and runs the encounters via role-frames. The LLM is busy
+during recruitment and pre-pull, idle during execution.
+
+### Scenario M — Healer mana break + party_chat hold
+
+Mid-dungeon pull. Healer bot **Saji**'s mana drops below 15%. Her
+role frame fires a digest delta (`self.mana_pct < 15` while in
+combat).
+
+```
+T2 on Saji (healer):
+1. coordinate_target(<current_skull_guid>, intent: "kill_third", ttl_seconds: 30)
+   // tank assists by throttling — but Saji is healer, not tank,
+   // so this hint applies only to her own (rare) damage output;
+   // actual throttle requires asking the tank
+   // -> ACTUALLY: the better tool is party_chat
+2. party_chat(text_hint: "5% mana, need a sec after this mob")
+   // T3: "low mana! finishing this one then drinking"
+3. memory.remember(text: "Mana managed poorly on Deadmines pull — drink earlier next pull", salience: 0.4)
+```
+
+Other bots see the message in `recent_party_chat` and the *tank*
+bot wakes T2:
+
+```
+T2 on tank bot:
+1. coordinate_target(<current_skull_guid>, intent: "kill_first", ttl_seconds: 30)
+   // confirm finish current
+2. // engine queues an automatic "pause" after kill
+3. party_chat(text_hint: "ok holding after this")
+   // T3: "k holding, drink up"
+```
+
+The pause-after-kill behavior is a role-frame default for tanks
+("after a `low_mana` party_chat from healer, hold position once
+current pull resolves"). No LLM call needed beyond the
+acknowledgement.
+
+### Scenario N — Mid-fight target override (healer in trouble)
+
+Group is on the Boss Skull. Mid-fight, an add aggros the healer.
+Healer HP drops below 40%. Digest delta fires.
+
+```
+T2 on the off-tank-capable melee (warrior dps with defensive stance):
+1. coordinate_target(<Add_guid>, intent: "kill_first", ttl_seconds: 20)
+   // override the skull priority temporarily — save the healer
+2. party_chat(text_hint: "switching to the add on heidi")
+   // T3: "got the add, brb"
+```
+
+The other DPS bots see the `your_combat_hints` digest update and
+**don't** wake T2 — their role frame says "follow main assist (the
+warrior dps), kill what they kill." So they pivot to the add via the
+engine, not via the LLM.
+
+20 seconds later: add dies, hint expires, warrior dps returns to the
+boss skull automatically (no LLM call), other DPS follow.
+
+This is the most important property of role frames: **the LLM is
+called once for the *decision* to override; the *execution* of the
+override propagates through the engine via role-frame logic.**
+
+### Scenario O — Wipe and rebuild
+
+Group wipes on Mr. Smite. Everyone dead.
+
+```
+T2 on each bot (on death trigger, after rule-engine has updated state):
+1. release_spirit()
+2. memory.remember(
+     text: "Wiped on Mr. Smite — he hit hard at 50% phase change",
+     entities: [{name:"Mr. Smite", type:"npc"}, "Deadmines"],
+     relations: [(self, killed_by, Mr. Smite)],
+     salience: 0.6)
+```
+
+Bots run back (engine handles corpse run). Steve in party chat:
+`"let's take it easier this time, drink up"`.
+
+```
+T2 on each bot (after rez, mana_pct trigger or party_chat trigger):
+1. // no tool call — drink behavior is in role frame for casters
+2. // tank's role frame says "wait for ready check from leader"
+```
+
+Steve issues a ready check after 30s.
+
+```
+T2 on each bot:
+1. ready_check_response(ready: true)
+   // or false + party_chat if still drinking
+```
+
+Borgun pulls again. Same encounter, role frames + coordinate_target.
+The memory written on the previous attempt will surface in the next
+encounter's digest:
+
+```json
+"memory_hints": [
+  "You wiped on Mr. Smite — 50% phase change hits hard"
+]
+```
+
+The LLM uses this to inform pre-pull planning ("at 50% I should call
+a defensive cooldown rotation in party chat").
+
 ## 6. Goal stack ("resume" semantics)
 
 When a tool sets a goal that interrupts an ongoing one (Scenario D,
@@ -907,7 +1663,18 @@ question, may or may not be in v0).
    `set_goal` call), the validator failure falls back to the
    probability transition and doesn't re-prompt — too expensive at
    scale, and a single retry is rarely useful.
-5. **Should `flee_combat` and `request_help` actually be in v0?**
+5. **Role re-assignment mid-instance.** What happens if the group
+   loses a tank mid-run and a feral druid bot needs to switch to
+   bear form / tank role? v0 says role is fixed at instance entry,
+   but a real player would adapt. Probably a Phase 4+ extension:
+   a `switch_role(new_role, reason)` tool that requires being out
+   of combat and rewrites the role-frame in the system prompt.
+6. **Off-tank coordination on raid bosses.** Two-tank fights
+   (Onyxia, BWL-onward bosses) need explicit "MT vs OT" hints.
+   For v0, `mark_target_for_group` + `coordinate_target` is enough:
+   MT marks skull, OT picks up everything else by role-frame default.
+   Worth revisiting when Phase 5 raid content lands.
+7. **Should `flee_combat` and `request_help` actually be in v0?**
    They overlap with existing avoidance / call-for-help strategies
    in the rule engine. Probably defer to a later phase unless a
    playtest scenario specifically needs them.
