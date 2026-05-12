@@ -1289,7 +1289,12 @@ void RandomPlayerbotMgr::CheckLfgQueue()
         // ourselves from the DBC. Per-bot level + role filters still apply
         // inside LfgJoinAction::JoinLFG() so individual bots only queue for
         // dungeons appropriate to their level.
-        for (uint32 i = 1; i < sLFGDungeonStore.GetNumRows(); ++i)
+        LOG_INFO("playerbots.lfg",
+            "auto-populate: store rows={}, alliance.size before={}, horde.size before={}",
+            sLFGDungeonStore.GetNumRows(),
+            LfgDungeons[TEAM_ALLIANCE].size(),
+            LfgDungeons[TEAM_HORDE].size());
+        for (uint32 i = 0; i < sLFGDungeonStore.GetNumRows(); ++i)
         {
             LFGDungeonEntry const* dungeon = sLFGDungeonStore.LookupEntry(i);
             if (!dungeon)
@@ -1303,6 +1308,10 @@ void RandomPlayerbotMgr::CheckLfgQueue()
             LfgDungeons[TEAM_ALLIANCE].push_back(dungeon->ID);
             LfgDungeons[TEAM_HORDE].push_back(dungeon->ID);
         }
+        LOG_INFO("playerbots.lfg",
+            "auto-populate: added {} dungeons per team (final alliance.size={})",
+            LfgDungeons[TEAM_ALLIANCE].size(),
+            LfgDungeons[TEAM_ALLIANCE].size());
     }
 
     LOG_DEBUG("playerbots", "LFG Queue check finished");
