@@ -297,7 +297,9 @@ bool PlayerWantsInBattlegroundTrigger::IsActive()
     if (bot->GetBattleground() && bot->GetBattleground()->GetStatus() == STATUS_IN_PROGRESS)
         return false;
 
-    if (!bot->CanJoinToBattleground(nullptr))
+    // Deserter debuff check (Aura 26013) — inlined; see BattleGroundJoinAction.cpp
+    // for why we can't use CanJoinToBattleground() anymore.
+    if (bot->HasAura(26013))
         return false;
 
     return true;
