@@ -1,0 +1,6 @@
+# Phase 0.5 LLM-agent characterization: let brackin restart llama-server
+# and rewrite its env file without a TTY password prompt.
+brackin ALL=(root) NOPASSWD: /usr/bin/systemctl restart llama-server.service
+brackin ALL=(root) NOPASSWD: /usr/bin/systemctl start llama-server.service
+brackin ALL=(root) NOPASSWD: /usr/bin/systemctl stop llama-server.service
+brackin ALL=(root) NOPASSWD: /usr/bin/install -m 0644 /tmp/llama-server.env.next /etc/llama-server.env
