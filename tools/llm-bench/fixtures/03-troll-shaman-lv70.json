@@ -1,0 +1,55 @@
+{
+  "self": {
+    "name": "Zul'tani",
+    "race": "troll",
+    "class": "shaman",
+    "spec": "enhancement",
+    "level": 70,
+    "hp_pct": 100,
+    "mana_pct": 100,
+    "gold_copper": 1820400,
+    "is_in_combat": false,
+    "is_resting": true,
+    "is_dead": false
+  },
+  "location": {
+    "map": "Outland",
+    "zone": "Shattrath City",
+    "subzone": "World's End Tavern",
+    "near_npcs": ["Innkeeper Haelthol"],
+    "position": [-1839.1, 5466.8, -12.4]
+  },
+  "goal": {
+    "current": "rest",
+    "params": {},
+    "progress_pct": 60,
+    "elapsed_minutes": 6,
+    "ttl_minutes": 4
+  },
+  "quest_log": [],
+  "inventory_highlights": {
+    "bag_used": "30/48",
+    "junk_value_copper": 0,
+    "consumables": ["20x healing potion (lvl 65)", "10x flask of pure death"],
+    "gear_vs_level_score": 0.86
+  },
+  "social": {
+    "in_group": true,
+    "group_members": ["Tankmaster", "Healquick", "DPSone", "DPStwo"],
+    "guild": "Sons of Sen'jin",
+    "nearby_humans": [
+      {"name": "Tankmaster", "level": 70, "distance": 2.1},
+      {"name": "Healquick", "level": 70, "distance": 4.0}
+    ],
+    "recent_whispers": []
+  },
+  "event_log": [
+    "Joined party of Tankmaster",
+    "Party set queue for Heroic Mechanar",
+    "Tankmaster said: dps invite friends"
+  ],
+  "memory_hints": [
+    "Sons of Sen'jin: your guild for 6 months, friendly",
+    "Tankmaster: has tanked 4 heroics with you this week"
+  ]
+}

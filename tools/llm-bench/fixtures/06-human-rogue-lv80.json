@@ -1,0 +1,51 @@
+{
+  "self": {
+    "name": "Nightcutter",
+    "race": "human",
+    "class": "rogue",
+    "spec": "assassination",
+    "level": 80,
+    "hp_pct": 0,
+    "mana_pct": null,
+    "gold_copper": 4220000,
+    "is_in_combat": false,
+    "is_resting": false,
+    "is_dead": true
+  },
+  "location": {
+    "map": "Northrend",
+    "zone": "Icecrown",
+    "subzone": "Aldur'thar: The Desolation Gate",
+    "near_npcs": [],
+    "position": [5780.1, 2118.4, 562.5]
+  },
+  "goal": {
+    "current": "do_quest",
+    "params": {"quest_id": 13212, "objective_idx": 2},
+    "progress_pct": 70,
+    "elapsed_minutes": 14,
+    "ttl_minutes": 6
+  },
+  "quest_log": [
+    {"id": 13212, "title": "The Battle for the Aldur'thar", "progress": "4/5"}
+  ],
+  "inventory_highlights": {
+    "bag_used": "32/64",
+    "junk_value_copper": 12400,
+    "consumables": ["12x runic mana potion", "12x runic healing potion"],
+    "gear_vs_level_score": 0.91
+  },
+  "social": {
+    "in_group": false,
+    "group_members": [],
+    "guild": "Forsaken Light",
+    "nearby_humans": [],
+    "recent_whispers": []
+  },
+  "event_log": [
+    "Pulled 4 Vrykul Berserkers",
+    "Health 0 — you died",
+    "Released spirit — graveyard 220m east"
+  ],
+  "memory_hints": []
+}

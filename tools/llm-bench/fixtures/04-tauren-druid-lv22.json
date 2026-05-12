@@ -1,0 +1,54 @@
+{
+  "self": {
+    "name": "Hoofguard",
+    "race": "tauren",
+    "class": "druid",
+    "spec": "feral",
+    "level": 22,
+    "hp_pct": 67,
+    "mana_pct": 45,
+    "gold_copper": 4520,
+    "is_in_combat": false,
+    "is_resting": false,
+    "is_dead": false
+  },
+  "location": {
+    "map": "Kalimdor",
+    "zone": "Stonetalon Mountains",
+    "subzone": "The Charred Vale",
+    "near_npcs": [],
+    "position": [-1112.5, 2018.4, 88.2]
+  },
+  "goal": {
+    "current": "go_grind",
+    "params": {"creature_type": "Bloodfury Harpy"},
+    "progress_pct": 30,
+    "elapsed_minutes": 11,
+    "ttl_minutes": 19
+  },
+  "quest_log": [
+    {"id": 6523, "title": "Harpies Threaten", "progress": "7/12"}
+  ],
+  "inventory_highlights": {
+    "bag_used": "16/16",
+    "junk_value_copper": 1840,
+    "consumables": [],
+    "gear_vs_level_score": 0.62
+  },
+  "social": {
+    "in_group": false,
+    "group_members": [],
+    "guild": null,
+    "nearby_humans": [],
+    "recent_whispers": []
+  },
+  "event_log": [
+    "Killed Bloodfury Roguefeather (+1 progress)",
+    "Looted Bloodfury Talon",
+    "Bags full — could not loot",
+    "Looted nothing from Bloodfury Slayer"
+  ],
+  "memory_hints": [
+    "Stonetalon: no nearby vendor; nearest is Sun Rock Retreat (10 min run)"
+  ]
+}

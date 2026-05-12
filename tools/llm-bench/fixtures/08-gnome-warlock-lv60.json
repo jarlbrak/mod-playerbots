@@ -1,0 +1,55 @@
+{
+  "self": {
+    "name": "Tickfizzle",
+    "race": "gnome",
+    "class": "warlock",
+    "spec": "affliction",
+    "level": 60,
+    "hp_pct": 100,
+    "mana_pct": 100,
+    "gold_copper": 720000,
+    "is_in_combat": false,
+    "is_resting": false,
+    "is_dead": false
+  },
+  "location": {
+    "map": "Eastern Kingdoms",
+    "zone": "Burning Steppes",
+    "subzone": "Morgan's Vigil",
+    "near_npcs": ["John J. Keeshan", "Helendis Riverhorn", "Ragged John"],
+    "position": [-8344.5, -1140.1, 142.6]
+  },
+  "goal": {
+    "current": "idle",
+    "params": {},
+    "progress_pct": 0,
+    "elapsed_minutes": 0,
+    "ttl_minutes": 0
+  },
+  "quest_log": [
+    {"id": 4263, "title": "A Taste of Flame", "progress": "complete, turn in"},
+    {"id": 4264, "title": "Hot Fiery Death", "progress": "complete, turn in"},
+    {"id": 4290, "title": "Felnok Steelspring", "progress": "complete, turn in"}
+  ],
+  "inventory_highlights": {
+    "bag_used": "26/30",
+    "junk_value_copper": 6400,
+    "consumables": ["10x mageweave bandage", "5x mana potion (lvl 55)"],
+    "gear_vs_level_score": 0.81
+  },
+  "social": {
+    "in_group": false,
+    "group_members": [],
+    "guild": "The Defias Brotherhood",
+    "nearby_humans": [],
+    "recent_whispers": []
+  },
+  "event_log": [
+    "Arrived at Morgan's Vigil",
+    "Quest available: The True Masters",
+    "Three quests in log ready to turn in"
+  ],
+  "memory_hints": [
+    "John J. Keeshan: known questgiver, you have a turn-in for him"
+  ]
+}

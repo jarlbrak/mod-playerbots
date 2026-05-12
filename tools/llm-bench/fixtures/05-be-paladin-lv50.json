@@ -1,0 +1,52 @@
+{
+  "self": {
+    "name": "Dawnshield",
+    "race": "blood elf",
+    "class": "paladin",
+    "spec": "retribution",
+    "level": 50,
+    "hp_pct": 41,
+    "mana_pct": 22,
+    "gold_copper": 88200,
+    "is_in_combat": true,
+    "is_resting": false,
+    "is_dead": false
+  },
+  "location": {
+    "map": "Eastern Kingdoms",
+    "zone": "Western Plaguelands",
+    "subzone": "Sorrow Hill",
+    "near_npcs": [],
+    "position": [1602.5, -2188.7, 60.3]
+  },
+  "goal": {
+    "current": "do_quest",
+    "params": {"quest_id": 5232, "objective_idx": 0},
+    "progress_pct": 50,
+    "elapsed_minutes": 6,
+    "ttl_minutes": 14
+  },
+  "quest_log": [
+    {"id": 5232, "title": "Mottled Boars (elite area)", "progress": "elite spawn"}
+  ],
+  "inventory_highlights": {
+    "bag_used": "20/24",
+    "junk_value_copper": 1200,
+    "consumables": ["3x healing potion (lvl 45)"],
+    "gear_vs_level_score": 0.74
+  },
+  "social": {
+    "in_group": true,
+    "group_members": ["Holyhealz"],
+    "guild": "Silvermoon Honor",
+    "nearby_humans": [{"name": "Holyhealz", "level": 50, "distance": 6.2}],
+    "recent_whispers": []
+  },
+  "event_log": [
+    "Pulled Scarlet Centurion (elite, +5)",
+    "Holyhealz cast Flash of Light on you",
+    "Scarlet Centurion hits you for 1820",
+    "Health below 50%"
+  ],
+  "memory_hints": []
+}
