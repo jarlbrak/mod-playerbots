@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BotGoal",
+  "description": "T1 goal-setter output for mod-playerbots LLM agent layer (mirrors llm_agent_design.md §7.1).",
+  "type": "object",
+  "required": ["goal", "params", "ttl_minutes", "reasoning"],
+  "additionalProperties": false,
+  "properties": {
+    "goal": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "go_grind",
+        "go_camp",
+        "wander_npc",
+        "wander_random",
+        "do_quest",
+        "travel_flight",
+        "rest",
+        "outdoor_pvp"
+      ]
+    },
+    "params": {
+      "type": "object",
+      "description": "Variant-specific params. Permissive on shape; semantic validation is the C++ side in Phase 1.",
+      "additionalProperties": true
+    },
+    "ttl_minutes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 240
+    },
+    "reasoning": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 600
+    }
+  }
+}
