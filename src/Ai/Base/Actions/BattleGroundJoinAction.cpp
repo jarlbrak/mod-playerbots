@@ -342,11 +342,13 @@ bool BGJoinAction::isUseful()
     if (bot->IsInCombat())
         return false;
 
-    // check Deserter debuff
-    // Upstream AC changed CanJoinToBattleground signature to require a
-    // Battleground const* arg. nullptr is accepted (function tolerates it
-    // for the deserter-debuff-only path we use here).
-    if (!bot->CanJoinToBattleground(nullptr))
+    // check Deserter debuff (Aura 26013)
+    // Upstream AC's CanJoinToBattleground(bg) dereferences bg->isArena() so
+    // it cannot be called with nullptr (the previous "fix" segfaults at
+    // BGJoinAction::isUseful in worker threads). Inline the deserter check —
+    // it's what the original no-arg call effectively did for the bot path,
+    // since bots have the RBAC join permissions anyway.
+    if (bot->HasAura(26013))
         return false;
 
     // check if has free queue slots (pointless as already making sure not in queue)
