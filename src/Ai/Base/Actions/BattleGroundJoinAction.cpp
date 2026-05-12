@@ -343,7 +343,10 @@ bool BGJoinAction::isUseful()
         return false;
 
     // check Deserter debuff
-    if (!bot->CanJoinToBattleground())
+    // Upstream AC changed CanJoinToBattleground signature to require a
+    // Battleground const* arg. nullptr is accepted (function tolerates it
+    // for the deserter-debuff-only path we use here).
+    if (!bot->CanJoinToBattleground(nullptr))
         return false;
 
     // check if has free queue slots (pointless as already making sure not in queue)
