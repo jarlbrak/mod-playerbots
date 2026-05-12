@@ -1,0 +1,21 @@
+[project]
+name = "llm-bench"
+version = "0.1.0"
+description = "Phase 0.5 hardware-validation bench for the LLM agent layer"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx[http2]>=0.27",
+    "jsonschema>=4.20",
+    "click>=8.1",
+    "tabulate>=0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
