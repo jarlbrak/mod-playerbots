@@ -20,9 +20,11 @@ add_executable(llmagent_unit_tests
   test_config_load.cpp
   test_goal_parser.cpp
   test_http_client.cpp
+  test_digest_shape.cpp
   ${LLMAGENT_DIR}/LlmAgentConfig.cpp
   ${LLMAGENT_DIR}/Schemas/Goal.cpp
   ${LLMAGENT_DIR}/Client/LlmHttpClient.cpp
+  ${LLMAGENT_DIR}/Tiers/Tier0_StateDigest.cpp
 )
 
 target_include_directories(llmagent_unit_tests PRIVATE
