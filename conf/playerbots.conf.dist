@@ -730,6 +730,29 @@ AiPlayerbot.LfgDungeonsAutoPopulate = 1
 #
 AiPlayerbot.LfgAllowBotOnlyGroups = 0
 
+#
+# F4 P4 — AH listing sub-behavior. Any bot carrying loot worth more on AH
+# than at a vendor will interrupt its current activity to visit the
+# nearest auctioneer and list items. Listings get bought by mod-playerbots'
+# built-in AHBot buyer logic, closing the economy loop.
+#
+# Per-bot "merchant perception" comes from sRandomPlayerbotMgr.GetSellMultiplier
+# (uniform [0.80, 2.50]). A bot with multiplier 0.8 thinks vendor > AH and
+# won't list; a bot with 2.5 lists everything. This naturally diversifies AH
+# prices without a learned model.
+#
+# AhProfitMargin: list if estimated AH >= margin * vendorPrice (default 1.5x).
+# AhHighValueItemThreshold: trigger the AH detour if any inventory item has
+#   estimated AH price >= this many copper (default 50000 = 5 gold).
+# AhBagPressureFreeSlots: also trigger the detour when free slots drop to this.
+# AhListingMaxConcurrent: per-bot active-listings cap, prevents flooding.
+#
+AiPlayerbot.AhListingEnabled = 1
+AiPlayerbot.AhProfitMargin = 1.5
+AiPlayerbot.AhListingMaxConcurrent = 5
+AiPlayerbot.AhBagPressureFreeSlots = 4
+AiPlayerbot.AhHighValueItemThreshold = 50000
+
 # Enable/Disable periodic online - offline of randombots to mimic the real-world scenario where not all players are online simultaneously
 # When enabled, randombots are randomly selected to go online or offline periodically from a larger set
 # Default: 0 (disabled, the set of online bots remains fixed)

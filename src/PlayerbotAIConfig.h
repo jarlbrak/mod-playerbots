@@ -148,6 +148,13 @@ public:
     bool lfgDungeonsAutoPopulate;
     bool lfgAllowBotOnlyGroups;
 
+    // F4 P4 — AH listing sub-behavior
+    bool ahListingEnabled;
+    float ahProfitMargin;
+    uint32 ahListingMaxConcurrent;
+    uint32 ahBagPressureFreeSlots;
+    uint32 ahHighValueItemThreshold;
+
     // Buff system
     // Min group size to use Greater buffs (Paladin, Mage, Druid). Default: 3
     int32 minBotsForGreaterBuff;
