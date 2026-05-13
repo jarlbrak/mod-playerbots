@@ -73,3 +73,130 @@ nlohmann::json BuildDigestJson(const BotState& s) {
 
     return j;
 }
+
+// ===========================================================================
+// Worldserver-thread only. NOT linked into unit tests.
+// ===========================================================================
+#ifndef LLMAGENT_UNIT_TESTS
+
+#include "Playerbots/PlayerbotAI.h"
+#include "Player.h"
+#include "Map.h"
+#include "QuestDef.h"
+
+namespace {
+
+std::string class_name_lower(uint8 cls) {
+    switch (cls) {
+        case CLASS_WARRIOR: return "warrior";
+        case CLASS_PALADIN: return "paladin";
+        case CLASS_HUNTER:  return "hunter";
+        case CLASS_ROGUE:   return "rogue";
+        case CLASS_PRIEST:  return "priest";
+        case CLASS_DEATH_KNIGHT: return "death_knight";
+        case CLASS_SHAMAN:  return "shaman";
+        case CLASS_MAGE:    return "mage";
+        case CLASS_WARLOCK: return "warlock";
+        case CLASS_DRUID:   return "druid";
+        default: return "unknown";
+    }
+}
+
+std::string race_name_lower(uint8 r) {
+    switch (r) {
+        case RACE_HUMAN:    return "human";
+        case RACE_ORC:      return "orc";
+        case RACE_DWARF:    return "dwarf";
+        case RACE_NIGHTELF: return "night_elf";
+        case RACE_UNDEAD_PLAYER: return "undead";
+        case RACE_TAUREN:   return "tauren";
+        case RACE_GNOME:    return "gnome";
+        case RACE_TROLL:    return "troll";
+        case RACE_BLOODELF: return "blood_elf";
+        case RACE_DRAENEI:  return "draenei";
+        default: return "unknown";
+    }
+}
+
+}  // anon
+
+BotState SnapshotBot(PlayerbotAI* botAI) {
+    BotState s;
+    if (!botAI) return s;
+    Player* bot = botAI->GetBot();
+    if (!bot) return s;
+
+    s.self.name             = bot->GetName();
+    s.self.race             = race_name_lower(bot->getRace());
+    s.self.character_class  = class_name_lower(bot->getClass());
+    s.self.level            = bot->GetLevel();
+    s.self.hp_pct           = bot->GetMaxHealth() > 0 ? int(100.0f * bot->GetHealth() / bot->GetMaxHealth()) : 0;
+    s.self.mana_pct         = bot->GetMaxPower(POWER_MANA) > 0 ? int(100.0f * bot->GetPower(POWER_MANA) / bot->GetMaxPower(POWER_MANA)) : -1;
+    s.self.gold_copper      = static_cast<int64_t>(bot->GetMoney());
+    s.self.is_in_combat     = bot->IsInCombat();
+    s.self.is_resting       = bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING);
+    s.self.is_dead          = bot->isDead();
+
+    if (Map* m = bot->GetMap()) {
+        s.location.map      = m->GetMapName() ? m->GetMapName() : "";
+    }
+    s.location.zone         = sAreaTableStore.LookupEntry(bot->GetZoneId()) ?
+                              sAreaTableStore.LookupEntry(bot->GetZoneId())->area_name[0] : "";
+    s.location.subzone      = sAreaTableStore.LookupEntry(bot->GetAreaId()) ?
+                              sAreaTableStore.LookupEntry(bot->GetAreaId())->area_name[0] : "";
+    s.location.position     = {bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()};
+
+    // Goal block from rpgInfo.
+    auto& rpg = botAI->rpgInfo;
+    switch (rpg.GetStatus()) {
+        case RPG_IDLE:          s.goal.current = "Idle";         break;
+        case RPG_GO_GRIND:      s.goal.current = "GoGrind";      break;
+        case RPG_GO_CAMP:       s.goal.current = "GoCamp";       break;
+        case RPG_WANDER_NPC:    s.goal.current = "WanderNpc";    break;
+        case RPG_WANDER_RANDOM: s.goal.current = "WanderRandom"; break;
+        case RPG_DO_QUEST:      s.goal.current = "DoQuest";      break;
+        case RPG_TRAVEL_FLIGHT: s.goal.current = "TravelFlight"; break;
+        case RPG_REST:          s.goal.current = "Rest";         break;
+        case RPG_OUTDOOR_PVP:   s.goal.current = "OutdoorPvp";   break;
+        default:                s.goal.current = "Idle";         break;
+    }
+    if (auto* dq = std::get_if<NewRpgInfo::DoQuest>(&rpg.data)) {
+        nlohmann::json p;
+        p["quest_id"] = dq->questId;
+        p["objective_idx"] = dq->objectiveIdx;
+        s.goal.params_json = p.dump();
+    }
+
+    // Quest log: walk the first N slots.
+    for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE && s.quest_log.size() < 10; ++slot) {
+        uint32 qid = bot->GetQuestSlotQuestId(slot);
+        if (!qid) continue;
+        const Quest* q = sObjectMgr->GetQuestTemplate(qid);
+        if (!q) continue;
+        QuestLogEntry e;
+        e.id = qid;
+        e.title = q->GetTitle();
+        QuestStatus st = bot->GetQuestStatus(qid);
+        e.progress = (st == QUEST_STATUS_COMPLETE) ? "complete, turn in" : "in progress";
+        s.quest_log.push_back(std::move(e));
+    }
+
+    // Inventory highlights: bag-used summary; consumable detection deferred.
+    uint32 used = 0, total = 0;
+    for (uint8 bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag) {
+        if (Bag* b = bot->GetBagByPos(bag)) {
+            used += b->GetItemCount();
+            total += b->GetBagSize();
+        }
+    }
+    s.inventory.bag_used = std::to_string(used) + "/" + std::to_string(total);
+
+    // Social, event_log: leave empty for Phase 1. Phase 2 wires these.
+    return s;
+}
+
+nlohmann::json BuildDigest(PlayerbotAI* botAI) {
+    return BuildDigestJson(SnapshotBot(botAI));
+}
+
+#endif  // LLMAGENT_UNIT_TESTS

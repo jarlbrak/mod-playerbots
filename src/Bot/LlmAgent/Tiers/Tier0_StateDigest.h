@@ -82,4 +82,10 @@ struct BotState {
 
 nlohmann::json BuildDigestJson(const BotState& s);
 
+#ifndef LLMAGENT_UNIT_TESTS
+class PlayerbotAI;
+BotState  SnapshotBot(PlayerbotAI* botAI);  // touches game state; worldserver-thread only
+nlohmann::json BuildDigest(PlayerbotAI* botAI);  // convenience: snapshot + build
+#endif  // LLMAGENT_UNIT_TESTS
+
 #endif  // _PLAYERBOT_LLMAGENT_TIER0_DIGEST_H

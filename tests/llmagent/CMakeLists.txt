@@ -44,3 +44,5 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     -Wall -Wextra -Wpedantic -Wno-unused-parameter
   )
 endif()
+
+target_compile_definitions(llmagent_unit_tests PRIVATE LLMAGENT_UNIT_TESTS)
