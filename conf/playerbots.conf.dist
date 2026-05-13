@@ -2386,7 +2386,7 @@ AiPlayerbot.EnableGuildTasks = 0
 AiPlayerbot.SuggestDungeonsInLowerCaseRandomly = 0
 
 # Chance bot chooses RPG (Teleport to random camp for their level) instead of grinding
-AiPlayerbot.RandomBotRpgChance = 0.20
+AiPlayerbot.RandomBotRpgChance = 1.0
 
 # Set randombots movement speed to walking anywhere
 AiPlayerbot.RandombotsWalkingRPG = 0
