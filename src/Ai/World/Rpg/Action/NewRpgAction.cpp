@@ -111,11 +111,16 @@ bool NewRpgStatusUpdateAction::Execute(Event /*event*/)
         }
         case RPG_DO_QUEST:
         {
-            // DO_QUEST -> IDLE
-            if (info.HasStatusPersisted(statusDoQuestDuration))
+            NewRpgInfo& info = botAI->rpgInfo;
+            // F4 P2: keep the bot in DO_QUEST as long as the local zone has
+            // unfinished quests or eligible quest givers. Only re-roll when
+            // both are exhausted OR when the hard cap has elapsed.
+            bool localRemaining = LocalQuestsRemaining();
+            bool hardCapped = info.HasStatusPersisted(statusDoQuestDurationMax);
+            if (!localRemaining || hardCapped)
             {
-                info.ChangeToIdle();
-                return true;
+                return RandomChangeStatus({RPG_GO_CAMP, RPG_GO_GRIND, RPG_WANDER_RANDOM, RPG_WANDER_NPC,
+                                           RPG_DO_QUEST, RPG_TRAVEL_FLIGHT, RPG_REST, RPG_OUTDOOR_PVP});
             }
             break;
         }

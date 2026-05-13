@@ -51,6 +51,10 @@ protected:
     const int32 statusWanderRandomDuration = 5 * MINUTE  * IN_MILLISECONDS ;
     const int32 statusRestDuration = 30 * IN_MILLISECONDS ;
     const int32 statusDoQuestDuration = 30 * MINUTE  * IN_MILLISECONDS ;
+    // F4 P2: hard cap on DO_QUEST persistence to prevent stuck-forever bots
+    // when LocalQuestsRemaining keeps returning true due to a single
+    // unreachable POI. 2 hours.
+    const int32 statusDoQuestDurationMax = 2 * HOUR * IN_MILLISECONDS;
     const int32 statusOutDoorPvPDuration = HOUR * IN_MILLISECONDS ;
 };
 
