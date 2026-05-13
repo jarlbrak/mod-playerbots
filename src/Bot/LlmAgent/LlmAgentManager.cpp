@@ -59,6 +59,9 @@ void LlmAgentManager::Start(LlmAgentConfig cfg) {
     Shutdown();  // safe even if never started
 
     cfg_ = std::move(cfg);
+    // Phase 2 component config
+    selector_.Configure(cfg_.SamplePct, cfg_.SocialOptIn);
+    events_.Configure(cfg_.EventLogSize);
     if (!cfg_.Enabled) return;
 
     // Open JSONL (parent dir created if missing).
@@ -82,6 +85,10 @@ void LlmAgentManager::Shutdown() {
     queue_cv_.notify_all();
     for (auto& t : workers_) if (t.joinable()) t.join();
     workers_.clear();
+    counters_.DumpToLog();
+    selector_.Clear();
+    cooldowns_.Clear();
+    events_.ClearAll();
     if (jsonl_.is_open()) jsonl_.close();
 }
 
@@ -102,6 +109,7 @@ bool LlmAgentManager::Enqueue(LlmRequest request) {
         if (inflight_.count(request.bot_guid)) return false;
         inflight_.insert(request.bot_guid);
     }
+    counters_.IncEnqueued();
     request.ts_enqueued = std::chrono::steady_clock::now();
     {
         std::lock_guard<std::mutex> g(queue_mu_);
@@ -186,6 +194,8 @@ void LlmAgentManager::HandleRequest(LlmRequest req) {
             }
         }
     }
+
+    counters_.IncStatus(result.parsed_status);
 
     // Append JSONL line.
     nlohmann::json record;

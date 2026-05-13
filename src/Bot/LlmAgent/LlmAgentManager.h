@@ -3,6 +3,10 @@
 
 #include "Vendor/nlohmann_json.hpp"
 #include "LlmAgentConfig.h"
+#include "Selector/BotSelector.h"
+#include "Cooldown/BotCooldownMap.h"
+#include "EventBuffer/RecentEventBuffer.h"
+#include "Telemetry/LlmCounters.h"
 
 #include <atomic>
 #include <chrono>
@@ -53,6 +57,11 @@ class LlmAgentManager {
 
     bool Enabled() const { return cfg_.Enabled; }
     const LlmAgentConfig& Config() const { return cfg_; }
+    BotSelector&        Selector()        { return selector_; }
+    BotCooldownMap&     Cooldowns()       { return cooldowns_; }
+    RecentEventBuffer&  Events()          { return events_; }
+    LlmCounters&        Counters()        { return counters_; }
+    LlmApplyMode        ApplyMode() const { return cfg_.ApplyMode; }
     bool IsInFlight(uint64_t bot_guid) const;
     bool HasPendingResults(uint64_t bot_guid) const;
 
@@ -67,6 +76,10 @@ class LlmAgentManager {
     void AppendJsonl(const std::string& line);
 
     LlmAgentConfig                                cfg_;
+    BotSelector                                   selector_;
+    BotCooldownMap                                cooldowns_;
+    RecentEventBuffer                             events_;
+    LlmCounters                                   counters_;
     std::atomic<bool>                             running_{false};
     std::vector<std::thread>                      workers_;
 
