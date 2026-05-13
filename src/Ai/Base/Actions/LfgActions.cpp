@@ -5,6 +5,7 @@
 
 #include "LfgActions.h"
 
+#include <atomic>
 #include "AiFactory.h"
 #include "ItemVisitors.h"
 #include "LFGMgr.h"
@@ -84,15 +85,27 @@ uint32 LfgJoinAction::GetRoles()
 
 bool LfgJoinAction::JoinLFG()
 {
+    // [f3.5-diag] global counter so we can confirm JoinLFG fires at all
+    static std::atomic<uint64_t> joinlfg_calls{0};
+    uint64_t my_call = ++joinlfg_calls;
+    if (my_call % 500 == 0)  // every 500th call
+    {
+        fprintf(stderr,
+            "[f3.5-diag] JoinLFG global call #%lu (Bot %s lvl%u)\n",
+            (unsigned long)my_call, bot->GetName().c_str(), bot->GetLevel());
+        fflush(stderr);
+    }
+
     // check if already in lfg
     LfgState state = sLFGMgr->GetState(bot->GetGUID());
     if (state != LFG_STATE_NONE)
     {
-        if (bot->GetGUID().GetCounter() % 100 == 0)
+        static std::atomic<uint64_t> early_state_count{0};
+        if (++early_state_count % 500 == 0)
         {
             fprintf(stderr,
-                "[f3.5-diag] Bot %s lvl%u JoinLFG: early-return state=%d\n",
-                bot->GetName().c_str(), bot->GetLevel(), (int)state);
+                "[f3.5-diag] state-early-return #%lu (Bot %s, state=%d)\n",
+                (unsigned long)early_state_count.load(), bot->GetName().c_str(), (int)state);
             fflush(stderr);
         }
         return false;
