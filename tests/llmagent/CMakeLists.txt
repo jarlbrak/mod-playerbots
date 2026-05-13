@@ -27,9 +27,11 @@ add_executable(llmagent_unit_tests
   test_counters.cpp
   test_validator.cpp
   test_event_buffer.cpp
+  test_memory_client.cpp
   ${LLMAGENT_DIR}/LlmAgentConfig.cpp
   ${LLMAGENT_DIR}/Schemas/Goal.cpp
   ${LLMAGENT_DIR}/Client/LlmHttpClient.cpp
+  ${LLMAGENT_DIR}/Client/MemoryHttpClient.cpp
   ${LLMAGENT_DIR}/Tiers/Tier0_StateDigest.cpp
   ${LLMAGENT_DIR}/LlmAgentManager.cpp
   ${LLMAGENT_DIR}/Selector/BotSelector.cpp
