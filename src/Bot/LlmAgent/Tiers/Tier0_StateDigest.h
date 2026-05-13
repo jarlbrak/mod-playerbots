@@ -70,7 +70,7 @@ struct BotSocial {
     std::vector<RecentWhisper> recent_whispers;
 };
 
-struct BotState {
+struct LlmBotState {
     BotSelf                     self;
     BotLocation                 location;
     BotGoal                     goal;
@@ -80,11 +80,11 @@ struct BotState {
     std::vector<std::string>    event_log;
 };
 
-nlohmann::json BuildDigestJson(const BotState& s);
+nlohmann::json BuildDigestJson(const LlmBotState& s);
 
 #ifndef LLMAGENT_UNIT_TESTS
 class PlayerbotAI;
-BotState  SnapshotBot(PlayerbotAI* botAI);  // touches game state; worldserver-thread only
+LlmBotState  SnapshotBot(PlayerbotAI* botAI);  // touches game state; worldserver-thread only
 nlohmann::json BuildDigest(PlayerbotAI* botAI);  // convenience: snapshot + build
 #endif  // LLMAGENT_UNIT_TESTS
 

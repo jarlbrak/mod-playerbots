@@ -3,8 +3,8 @@
 
 namespace {
 
-BotState make_grimblade() {
-    BotState s;
+LlmBotState make_grimblade() {
+    LlmBotState s;
     s.self.name = "Grimblade";
     s.self.race = "orc";
     s.self.character_class = "warrior";
@@ -94,8 +94,8 @@ TEST_CASE("BuildDigestJson event_log is array of strings") {
     CHECK(j["event_log"].size() == 2);
 }
 
-TEST_CASE("BuildDigestJson handles empty BotState without crashing") {
-    BotState empty;
+TEST_CASE("BuildDigestJson handles empty LlmBotState without crashing") {
+    LlmBotState empty;
     auto j = BuildDigestJson(empty);
     CHECK(j["quest_log"].is_array());
     CHECK(j["event_log"].is_array());

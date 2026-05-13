@@ -51,7 +51,7 @@ bool LlmReplanIdleAction::Execute(Event /*event*/) {
     if (botAI->rpgInfo.GetStatus() != RPG_IDLE) return false;
     if (mgr.IsInFlight(guid)) return false;
 
-    BotState state;
+    LlmBotState state;
     try {
         state = SnapshotBot(botAI);
     } catch (...) {

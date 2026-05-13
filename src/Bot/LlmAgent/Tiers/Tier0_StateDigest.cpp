@@ -1,6 +1,6 @@
 #include "Tiers/Tier0_StateDigest.h"
 
-nlohmann::json BuildDigestJson(const BotState& s) {
+nlohmann::json BuildDigestJson(const LlmBotState& s) {
     nlohmann::json j;
 
     j["self"] = {
@@ -120,8 +120,8 @@ std::string race_name_lower(uint8 r) {
 
 }  // anon
 
-BotState SnapshotBot(PlayerbotAI* botAI) {
-    BotState s;
+LlmBotState SnapshotBot(PlayerbotAI* botAI) {
+    LlmBotState s;
     if (!botAI) return s;
     Player* bot = botAI->GetBot();
     if (!bot) return s;
