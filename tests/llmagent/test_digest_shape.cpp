@@ -101,3 +101,25 @@ TEST_CASE("BuildDigestJson handles empty LlmBotState without crashing") {
     CHECK(j["event_log"].is_array());
     CHECK(j["social"]["nearby_humans"].is_array());
 }
+
+TEST_CASE("BuildDigestJson event_log preserves order and content") {
+    LlmBotState s;
+    s.event_log = {"killed Murloc (+50 xp)", "received whisper from RealBob: hi"};
+    auto j = BuildDigestJson(s);
+    REQUIRE(j["event_log"].is_array());
+    REQUIRE(j["event_log"].size() == 2);
+    CHECK(j["event_log"][0].get<std::string>() == "killed Murloc (+50 xp)");
+    CHECK(j["event_log"][1].get<std::string>() == "received whisper from RealBob: hi");
+}
+
+TEST_CASE("BuildDigestJson recent_whispers shape") {
+    LlmBotState s;
+    s.social.recent_whispers.push_back({"RealBob", "wanna group?", 5});
+    s.social.recent_whispers.push_back({"RealJess", "ill heal you", 12});
+    auto j = BuildDigestJson(s);
+    REQUIRE(j["social"]["recent_whispers"].is_array());
+    REQUIRE(j["social"]["recent_whispers"].size() == 2);
+    CHECK(j["social"]["recent_whispers"][0]["from"].get<std::string>() == "RealBob");
+    CHECK(j["social"]["recent_whispers"][0]["text"].get<std::string>() == "wanna group?");
+    CHECK(j["social"]["recent_whispers"][0]["age_s"].get<int>() == 5);
+}

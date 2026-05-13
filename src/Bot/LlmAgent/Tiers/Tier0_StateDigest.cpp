@@ -83,6 +83,11 @@ nlohmann::json BuildDigestJson(const LlmBotState& s) {
 #include "Player.h"
 #include "Map.h"
 #include "QuestDef.h"
+#include "LlmAgentManager.h"
+#include "PlayerbotsMgr.h"
+#include <algorithm>
+#include <list>
+#include <utility>
 
 namespace {
 
@@ -196,7 +201,38 @@ LlmBotState SnapshotBot(PlayerbotAI* botAI) {
     }
     s.inventory.bag_used = std::to_string(used) + "/" + std::to_string(total);
 
-    // Social, event_log: leave empty for Phase 1. Phase 2 wires these.
+    // ===== Phase 2 enrichment =====
+
+    // event_log: pull from LlmAgentManager's per-bot ring buffer.
+    s.event_log = LlmAgentManager::Instance().Events().Snapshot(
+        bot->GetGUID().GetRawValue());
+
+    // social.nearby_humans: scan players in bot's grid; filter out playerbots.
+    // Cap at 5 by distance.
+    {
+        std::list<Player*> players;
+        bot->GetPlayerListInGrid(players, 50.0f);
+        std::vector<std::pair<float, Player*>> humans;
+        for (Player* p : players) {
+            if (!p || p == bot) continue;
+            if (sPlayerbotsMgr->GetPlayerbotAI(p) != nullptr) continue;
+            humans.emplace_back(bot->GetDistance(p), p);
+        }
+        std::sort(humans.begin(), humans.end(),
+                  [](auto& a, auto& b){ return a.first < b.first; });
+        for (size_t i = 0; i < humans.size() && i < 5; ++i) {
+            NearbyHuman nh;
+            nh.name     = humans[i].second->GetName();
+            nh.level    = humans[i].second->GetLevel();
+            nh.distance = humans[i].first;
+            s.social.nearby_humans.push_back(std::move(nh));
+        }
+    }
+
+    // social.recent_whispers: empty in Phase 2; whisper hook (Task 9) drops
+    // whisper content into event_log instead. If smoke data shows the LLM
+    // wants the structured form, Phase 3 adds a second sliding window.
+
     return s;
 }
 
