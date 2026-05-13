@@ -139,10 +139,34 @@ bool LfgJoinAction::JoinLFG()
         list.insert(dungeon->ID);
     }
 
+    // AC's LFG protocol rejects packets that mix LFG_TYPE_RANDOM with other
+    // types as LFG_JOIN_DUNGEON_INVALID — players using the LFG UI pick
+    // EITHER a random queue OR specific dungeon(s), never both at once.
+    // If we have any specific dungeons (DUNGEON / HEROIC / RAID), drop the
+    // random entries. Bracket-1 specific dungeons are what we actually want.
+    bool has_specific = false;
+    for (uint32 id : selected)
+        if (LFGDungeonEntry const* d = sLFGDungeonStore.LookupEntry(id))
+            if (d->TypeID != LFG_TYPE_RANDOM) { has_specific = true; break; }
+    if (has_specific)
+    {
+        std::vector<uint32> filtered_selected;
+        LfgDungeonSet filtered_list;
+        for (uint32 id : selected)
+        {
+            if (LFGDungeonEntry const* d = sLFGDungeonStore.LookupEntry(id))
+            {
+                if (d->TypeID == LFG_TYPE_RANDOM) continue;
+                filtered_selected.push_back(id);
+                filtered_list.insert(id);
+            }
+        }
+        selected = std::move(filtered_selected);
+        list = std::move(filtered_list);
+    }
+
     if (bot->GetGUID().GetCounter() % 100 == 0)
     {
-        // Count type distribution in `selected` to detect mixed-type queue packets
-        // that AC's JoinLfg may reject as LFG_JOIN_DUNGEON_INVALID.
         int t_random = 0, t_dungeon = 0, t_heroic = 0, t_raid = 0;
         for (uint32 id : selected)
         {
@@ -159,9 +183,9 @@ bool LfgJoinAction::JoinLFG()
             }
         }
         fprintf(stderr,
-            "[f3.5-diag] Bot %s lvl%u filter: selected=%zu (random=%d, dungeon=%d, heroic=%d, raid=%d)\n",
+            "[f3.5-diag] Bot %s lvl%u filter: selected=%zu (R=%d, D=%d, H=%d, raid=%d) has_specific=%d\n",
             bot->GetName().c_str(), bot->GetLevel(),
-            selected.size(), t_random, t_dungeon, t_heroic, t_raid);
+            selected.size(), t_random, t_dungeon, t_heroic, t_raid, (int)has_specific);
         fflush(stderr);
     }
 
@@ -171,7 +195,6 @@ bool LfgJoinAction::JoinLFG()
     if (list.empty())
         return false;
 
-    // Pre-packet trace
     if (bot->GetGUID().GetCounter() % 100 == 0)
     {
         fprintf(stderr,
