@@ -11,8 +11,12 @@ bool LlmReplanIdleTrigger::IsActive() {
     if (!bot) return false;
     uint64_t guid = bot->GetGUID().GetRawValue();
 
+    // Always allow draining results that are already on the stack.
     if (mgr.HasPendingResults(guid)) return true;
 
+    // Enqueue path requires sample/opt-in AND eligible cooldown AND Idle AND not in-flight.
+    if (!mgr.Selector().IsLlmBot(guid)) return false;
+    if (!mgr.Cooldowns().Eligible(guid)) return false;
     if (botAI->rpgInfo.GetStatus() != RPG_IDLE) return false;
     if (mgr.IsInFlight(guid)) return false;
     return true;

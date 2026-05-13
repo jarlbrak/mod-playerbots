@@ -204,3 +204,27 @@ TEST_CASE("LlmAgentManager Shutdown is idempotent") {
     mgr.Shutdown();  // second call must be a no-op
     CHECK(true);     // reaching here proves no crash
 }
+
+TEST_CASE("LlmAgentManager Cooldowns().Set blocks Eligible()") {
+    LlmAgentManager mgr;
+    LlmAgentConfig cfg;
+    cfg.Enabled = false;
+    mgr.Start(cfg);
+    mgr.Cooldowns().Set(42, std::chrono::steady_clock::now() + std::chrono::seconds(60));
+    CHECK(mgr.Cooldowns().Eligible(42) == false);
+    CHECK(mgr.Cooldowns().Eligible(43) == true);
+    mgr.Shutdown();
+}
+
+TEST_CASE("LlmAgentManager Selector().Configure + OptInBot interplay") {
+    LlmAgentManager mgr;
+    LlmAgentConfig cfg;
+    cfg.Enabled = false;
+    cfg.SamplePct = 0;
+    cfg.SocialOptIn = true;
+    mgr.Start(cfg);
+    CHECK(mgr.Selector().IsLlmBot(100) == false);
+    mgr.Selector().OptInBot(100);
+    CHECK(mgr.Selector().IsLlmBot(100) == true);
+    mgr.Shutdown();
+}
