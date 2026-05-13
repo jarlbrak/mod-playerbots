@@ -147,6 +147,8 @@ async def run_matrix(
     gbnf_path: Path,
     out_dir: Path,
     dry_run: bool,
+    single_cell: bool = False,
+    backend: str = "vulkan",
 ) -> None:
     fixtures = load_fixtures(fixtures_dir)
     schema = load_schema(schema_path)
@@ -155,16 +157,33 @@ async def run_matrix(
     all_rows: list[ResultRow] = []
     summaries: list[CellSummary] = []
 
-    models_to_run = MODELS[:1] if dry_run else MODELS
-    slots_to_run = [4] if dry_run else PARALLEL_SLOTS
-    grammars_to_run = ["json_schema"] if dry_run else GRAMMAR_MODES
-    steady_duration = 10.0 if dry_run else STEADY_DURATION_S
-    burst_n = 5 if dry_run else BURST_REQUESTS
-    cooling_s = 5.0 if dry_run else INTER_CELL_COOLING_S
+    if single_cell:
+        # Production cell: Qwen 2.5 7B + slots=4 + json_schema. The Phase 0.5
+        # winner; used for the ROCm comparison pass.
+        models_to_run = [m for m in MODELS if m.label == "qwen-2.5-7b"]
+        slots_to_run = [4]
+        grammars_to_run = ["json_schema"]
+        steady_duration = STEADY_DURATION_S
+        burst_n = BURST_REQUESTS
+        cooling_s = 0.0  # only one cell — no need for a cooling pause
+    elif dry_run:
+        models_to_run = MODELS[:1]
+        slots_to_run = [4]
+        grammars_to_run = ["json_schema"]
+        steady_duration = 10.0
+        burst_n = 5
+        cooling_s = 5.0
+    else:
+        models_to_run = MODELS
+        slots_to_run = PARALLEL_SLOTS
+        grammars_to_run = GRAMMAR_MODES
+        steady_duration = STEADY_DURATION_S
+        burst_n = BURST_REQUESTS
+        cooling_s = INTER_CELL_COOLING_S
 
     run_metadata = {
         "date": date.today().isoformat(),
-        "backend": "vulkan",
+        "backend": backend,
         "endpoint": endpoint,
         "models": ",".join(m.label for m in models_to_run),
         "slots": ",".join(str(s) for s in slots_to_run),
@@ -175,6 +194,7 @@ async def run_matrix(
         "gpu_power_cap_watts": GPU_POWER_CAP_WATTS,
         "inter_cell_cooling_s": cooling_s,
         "dry_run": dry_run,
+        "single_cell": single_cell,
     }
 
     # Apply GPU power cap before any GPU work; restore on exit.
@@ -189,7 +209,7 @@ async def run_matrix(
                 for slots in slots_to_run:
                     cell_idx += 1
                     click.echo(f"[matrix] starting cell {cell_idx}/{total_cells} model={model.label} slots={slots}")
-                    write_env_and_restart(model.gguf_filename, slots)
+                    write_env_and_restart(model.gguf_filename, slots, backend=backend)
                     await wait_for_health(endpoint)
                     vram_idle_mb, vram_total_mb = sample_vram(HEIMDAL_AMD_CARD_DEVICE)
                     idle_temps = sample_gpu_temps(HEIMDAL_AMD_HWMON_DIR)
@@ -300,7 +320,9 @@ async def run_matrix(
 @click.option("--gbnf-path", default="grammars/goal.gbnf", type=click.Path(exists=True, path_type=Path))
 @click.option("--out-dir", required=True, type=click.Path(path_type=Path))
 @click.option("--dry-run", is_flag=True, help="Smoke test: 1 model, 4 slots, json_schema only, 10 s steady, 5 burst, 5 s cooling.")
-@click.option("--stop-server-on-exit", is_flag=True, help="Stop llama-server after the run.")
+@click.option("--single-cell", is_flag=True, help="Run only the production cell (Qwen 2.5 7B + slots=4 + json_schema). Mutually exclusive with --dry-run.")
+@click.option("--rocm", is_flag=True, help="Target the ROCm Quadlet (llama-server-rocm.service) instead of Vulkan.")
+@click.option("--stop-server-on-exit", is_flag=True, help="Stop llama-server (the active backend) after the run.")
 def main(
     endpoint: str,
     fixtures_dir: Path,
@@ -308,9 +330,14 @@ def main(
     gbnf_path: Path,
     out_dir: Path,
     dry_run: bool,
+    single_cell: bool,
+    rocm: bool,
     stop_server_on_exit: bool,
 ) -> None:
     """Run the Phase 0.5 characterization matrix."""
+    if dry_run and single_cell:
+        raise click.UsageError("--dry-run and --single-cell are mutually exclusive")
+    backend = "rocm" if rocm else "vulkan"
     try:
         asyncio.run(
             run_matrix(
@@ -320,11 +347,13 @@ def main(
                 gbnf_path=gbnf_path,
                 out_dir=out_dir,
                 dry_run=dry_run,
+                single_cell=single_cell,
+                backend=backend,
             )
         )
     finally:
         if stop_server_on_exit:
-            stop_server()
+            stop_server(backend=backend)
 
 
 if __name__ == "__main__":
