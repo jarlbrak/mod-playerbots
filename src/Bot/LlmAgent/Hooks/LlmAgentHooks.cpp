@@ -3,7 +3,7 @@
 #ifndef LLMAGENT_UNIT_TESTS
 #include "LlmAgentManager.h"
 #include "Player.h"
-#include "PlayerbotsMgr.h"
+#include "PlayerbotMgr.h"
 #endif
 
 #include <sstream>
@@ -21,7 +21,7 @@ namespace LlmAgentHooks {
 void OnWhisperReceived(Player* bot, Player* sender, const std::string& text) {
 #ifndef LLMAGENT_UNIT_TESTS
     if (!bot || !sender) return;
-    if (sPlayerbotsMgr->GetPlayerbotAI(sender) != nullptr) return;  // bot-to-bot whisper, ignore
+    if (sPlayerbotsMgr.GetPlayerbotAI(sender) != nullptr) return;  // bot-to-bot whisper, ignore
 
     auto& mgr = LlmAgentManager::Instance();
     if (!mgr.Enabled()) return;

@@ -84,7 +84,7 @@ nlohmann::json BuildDigestJson(const LlmBotState& s) {
 #include "Map.h"
 #include "QuestDef.h"
 #include "LlmAgentManager.h"
-#include "PlayerbotsMgr.h"
+#include "PlayerbotMgr.h"
 #include <algorithm>
 #include <list>
 #include <utility>
@@ -215,7 +215,7 @@ LlmBotState SnapshotBot(PlayerbotAI* botAI) {
         std::vector<std::pair<float, Player*>> humans;
         for (Player* p : players) {
             if (!p || p == bot) continue;
-            if (sPlayerbotsMgr->GetPlayerbotAI(p) != nullptr) continue;
+            if (sPlayerbotsMgr.GetPlayerbotAI(p) != nullptr) continue;
             humans.emplace_back(bot->GetDistance(p), p);
         }
         std::sort(humans.begin(), humans.end(),
