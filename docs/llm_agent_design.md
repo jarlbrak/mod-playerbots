@@ -811,9 +811,9 @@ Concrete revisions to the document:
 
 ### 15.7 Open follow-ups identified by the run
 
-- **ROCm comparison pass** (originally deferred). The 6900 XT supports
-  ROCm; if the same matrix on ROCm gains ≥20% throughput, it justifies
-  the heavier setup.
+- ~~ROCm comparison pass~~ — resolved 2026-05-12; see §15.8. Vulkan
+  stays as the production backend (ROCm was ~30-40% slower at
+  concurrency=4 on this hardware).
 - **Investigate Gemma 2 9B GBNF collapse at slots=8.** A 60-line
   hand-written grammar dropped adherence to 8% under high concurrency
   on the smallest model. This may be a llama.cpp grammar-cache bug
@@ -835,3 +835,38 @@ Concrete revisions to the document:
   steady hit the timeout on most requests. The 30 s ceiling was a
   defensive choice; rerun with a higher cap (e.g. 60 s) would let
   the long tail surface its actual distribution.
+
+### 15.8 ROCm vs Vulkan — head-to-head (production cell)
+
+Run date: 2026-05-12. Same hardware as §15.1 (Heimdal, RX 6900 XT, 16 GB).
+Image: `ghcr.io/ggml-org/llama.cpp:server-rocm` (22.4 GB; ~40× the Vulkan
+image at 535 MB). Workload: Qwen 2.5 7B Q4_K_M + `response_format` JSON
+Schema + `--parallel 4` (the Phase 0.5 production cell). Methodology:
+[Phase 0.5 ROCm comparison spec](superpowers/specs/2026-05-12-llm-agent-phase-0.5-rocm-comparison-design.md).
+
+Full per-request data: [`results/2026-05-12-rocm/results.csv`](../results/2026-05-12-rocm/results.csv).
+Per-cell aggregates: [`results/2026-05-12-rocm/summary.md`](../results/2026-05-12-rocm/summary.md).
+
+| Metric | Vulkan | ROCm | Δ |
+| --- | ---: | ---: | ---: |
+| **steady, N=60** | | | |
+| p50 wall (ms) | 1,603 | 2,225 | **+39%** (slower) |
+| p95 wall (ms) | 2,749 | 4,190 | **+52%** (slower) |
+| p99 wall (ms) | 3,405 | 5,098 | +50% (slower) |
+| decode (tok/s) | 66.4 | 44.6 | **-33%** |
+| prefill (tok/s) | 282 | 267 | -5% |
+| adherence | 100% | 100% | 0 pp |
+| **burst, N=50** | | | |
+| p50 wall (ms) | 3,675 | 4,636 | +26% (slower) |
+| p95 wall (ms) | 4,362 | 5,750 | +32% (slower) |
+| decode (tok/s) | 53.1 | 41.1 | -23% |
+| adherence | 100% | 100% | 0 pp |
+| **shared** | | | |
+| VRAM loaded (MB) | 5,073 | 5,357 | +284 MB |
+| junction °C peak | 86 | 73 | **-13 °C** (cooler) |
+
+**Decision: Vulkan stays as the production backend.** ROCm was meaningfully slower across every latency and throughput metric (steady p50 +39%, decode tok/s -33%) at concurrency=4 on this specific workload — despite ROCm running 13 °C cooler at the GPU junction, indicating the card is *not* compute-saturated, just slower per request. Single-stream sanity (the trivial `Say hello` test) showed ROCm faster (106 tok/s vs Vulkan's 84) but that win evaporates under multi-slot grammar-constrained decoding. The image is also ~40× larger (22.4 GB vs 535 MB), which adds non-trivial operational cost for no measured benefit.
+
+**Implication for §15.6**: production recommendation is unchanged — Vulkan + Qwen 2.5 7B + `json_schema` + `--parallel 4`. The §15.7 ROCm follow-up is closed.
+
+**One genuinely surprising finding**: ROCm at single-stream is faster (106 vs 84 tok/s, +26%) but slower at slots=4 (44.6 vs 66.4 tok/s, -33%). That's a 60-point swing in relative throughput as concurrency rises. Hypothesis: llama.cpp's Vulkan backend has better continuous-batching kernel paths for AMD RDNA2 than the ROCm HIP code path does. If a future llama.cpp release reworks ROCm batching (or if we switch to a larger model where compute-bound time dominates), it would be worth a re-test. Not load-bearing for Phase 1.
