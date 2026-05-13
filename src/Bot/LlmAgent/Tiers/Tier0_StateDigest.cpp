@@ -85,8 +85,8 @@ nlohmann::json BuildDigestJson(const LlmBotState& s) {
 #include "QuestDef.h"
 #include "LlmAgentManager.h"
 #include "PlayerbotMgr.h"
+#include "ObjectAccessor.h"
 #include <algorithm>
-#include <list>
 #include <utility>
 
 namespace {
@@ -207,13 +207,15 @@ LlmBotState SnapshotBot(PlayerbotAI* botAI) {
     s.event_log = LlmAgentManager::Instance().Events().Snapshot(
         bot->GetGUID().GetRawValue());
 
-    // social.nearby_humans: scan players in bot's grid; filter out playerbots.
-    // Cap at 5 by distance.
+    // social.nearby_humans: pull from existing AI value "nearest friendly
+    // players" (a GuidVector), resolve each guid to a Player*, filter out
+    // playerbots, cap at 5 by distance.
     {
-        std::list<Player*> players;
-        bot->GetPlayerListInGrid(players, 50.0f);
+        GuidVector nearest = botAI->GetAiObjectContext()
+            ->GetValue<GuidVector>("nearest friendly players")->Get();
         std::vector<std::pair<float, Player*>> humans;
-        for (Player* p : players) {
+        for (ObjectGuid const& g : nearest) {
+            Player* p = ObjectAccessor::FindPlayer(g);
             if (!p || p == bot) continue;
             if (sPlayerbotsMgr.GetPlayerbotAI(p) != nullptr) continue;
             humans.emplace_back(bot->GetDistance(p), p);
