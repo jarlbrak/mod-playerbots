@@ -1,3 +1,4 @@
+#include "Playerbots.h"
 #include "RagefireChasmMultipliers.h"
 #include "RagefireChasmActions.h"
 #include "GenericSpellActions.h"
@@ -7,9 +8,13 @@
 // generic add-target actions when the boss is present and targetable. All
 // multipliers follow the same shape: find the boss, suppress competing
 // DpsAssistAction targeting when boss is alive.
-
+//
+// AI_VALUE / AI_VALUE2 expand to `context->...`; `context` is an inherited
+// AiObject member in normal methods, but this is a free static helper so
+// the macro can't see it. Materialise context from botAI here.
 static float SuppressAddsIfBossAlive(PlayerbotAI* botAI, char const* bossName, Action* action)
 {
+    AiObjectContext* context = botAI->GetAiObjectContext();
     Unit* boss = AI_VALUE2(Unit*, "find target", bossName);
     if (!boss) { return 1.0f; }
     if (!boss->isTargetableForAttack()) { return 1.0f; }
