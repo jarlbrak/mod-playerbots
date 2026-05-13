@@ -1060,19 +1060,21 @@ AiPlayerbot.EnableNewRpgStrategy = 1
 # WanderRandom  (Default: 15  Move randomly nearby to find and kill mobs)
 # WanderNpc     (Default: 20  Randomly interact with nearby NPCs​)
 # GoGrind       (Default: 15  Go to nearby level-appropriate locations to grind for killing mobs)
-# GoCamp        (Default: 10  Return to a nearby camp depending on innkeeper/flightmaster)​
-# DoQuest       (Default: 60  Select quest from the quest log and head to the location to attempt completion​)
-# TravelFlight  (Default: 15  Go to the nearest flightmaster and fly to a level-appropriate area)
-# Rest          (Default: 5   Take a break for a while and do nothing)
-# OutdoorPvp    (Default: 10  Participate in outdoor PvP capture points if already in an outdoor PvP zone)
-AiPlayerbot.RpgStatusProbWeight.WanderRandom = 15
-AiPlayerbot.RpgStatusProbWeight.WanderNpc = 20
-AiPlayerbot.RpgStatusProbWeight.GoGrind = 15
-AiPlayerbot.RpgStatusProbWeight.GoCamp = 10
-AiPlayerbot.RpgStatusProbWeight.DoQuest = 60
-AiPlayerbot.RpgStatusProbWeight.TravelFlight = 15
-AiPlayerbot.RpgStatusProbWeight.Rest = 5
-AiPlayerbot.RpgStatusProbWeight.OutdoorPvp = 10
+#
+# F4 - Bot persona distribution at any tick. Weights are summed and a
+# random status is picked proportionally. Defaults target ~50% questing,
+# ~35% farming (GoGrind), the rest split across wandering/flight/PvP.
+# Tune in 5-10 unit increments and observe the persona-mix snapshot to
+# converge.
+#
+AiPlayerbot.RpgStatusProbWeight.WanderRandom = 8
+AiPlayerbot.RpgStatusProbWeight.WanderNpc = 10
+AiPlayerbot.RpgStatusProbWeight.GoGrind = 70
+AiPlayerbot.RpgStatusProbWeight.GoCamp = 6
+AiPlayerbot.RpgStatusProbWeight.DoQuest = 100
+AiPlayerbot.RpgStatusProbWeight.TravelFlight = 4
+AiPlayerbot.RpgStatusProbWeight.Rest = 0
+AiPlayerbot.RpgStatusProbWeight.OutdoorPvp = 2
 
 # Bots' minimum and maximum level when teleporting in and out of a zone, according to the new RPG strategy
 # Format: AiPlayerbot.ZoneBracket.zoneID = minLevel,maxLevel
