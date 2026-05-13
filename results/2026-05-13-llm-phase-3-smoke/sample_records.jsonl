@@ -1,0 +1,25 @@
+{"bot_name":"Joly","parsed_status":"ok","inference_ms":1416,"parsed_goal":"idle","hints_len":0,"hints":[]}
+{"bot_name":"Kylenne","parsed_status":"ok","inference_ms":1749,"parsed_goal":"idle","hints_len":0,"hints":[]}
+{"bot_name":"Phehaa","parsed_status":"ok","inference_ms":2090,"parsed_goal":"idle","hints_len":1,"hints":["killed Grizzled Brown Bear in Bloodmyst Isle"]}
+{"bot_name":"Valaston","parsed_status":"ok","inference_ms":2031,"parsed_goal":"idle","hints_len":1,"hints":["killed Rogue Flame Spirit in Stonetalon Mountains"]}
+{"bot_name":"Aspian","parsed_status":"ok","inference_ms":1168,"parsed_goal":"idle","hints_len":0,"hints":[]}
+{"bot_name":"Irria","parsed_status":"ok","inference_ms":1216,"parsed_goal":"idle","hints_len":0,"hints":[]}
+{"bot_name":"Heeste","parsed_status":"ok","inference_ms":1022,"parsed_goal":"idle","hints_len":0,"hints":[]}
+{"bot_name":"Garrisara","parsed_status":"ok","inference_ms":1261,"parsed_goal":"idle","hints_len":3,"hints":["killed Quel'dorei Ghost in Ghostlands","killed Quel'dorei Ghost in Ghostlands","killed Quel'dorei Ghost in Ghostlands"]}
+{"bot_name":"Chopuroia","parsed_status":"ok","inference_ms":3297,"parsed_goal":"idle","hints_len":2,"hints":["killed Lost Barrens Kodo in The Barrens","killed Sunscale Screecher in The Barrens"]}
+{"bot_name":"Talthein","parsed_status":"ok","inference_ms":3016,"parsed_goal":"idle","hints_len":2,"hints":["killed Gangled Flesheater in Ghostlands","killed Gangled Flesheater in Ghostlands"]}
+{"bot_name":"Muhehuun","parsed_status":"ok","inference_ms":4411,"parsed_goal":"idle","hints_len":2,"hints":["killed Murloc Minor Tidecaller in Redridge Mountains","killed Murloc Shorestriker in Redridge Mountains"]}
+{"bot_name":"Tadakahr","parsed_status":"ok","inference_ms":2895,"parsed_goal":"idle","hints_len":0,"hints":[]}
+{"bot_name":"Hanktoia","parsed_status":"ok","inference_ms":2466,"parsed_goal":"idle","hints_len":3,"hints":["killed Flatland Cougar in Mulgore","killed Flatland Cougar in Mulgore","killed Prairie Stalker in Mulgore"]}
+{"bot_name":"Vaesnay","parsed_status":"schema_error","inference_ms":2266,"parsed_goal":null,"hints_len":1,"hints":["killed Greater Plainstrider in The Barrens"]}
+{"bot_name":"Saenea","parsed_status":"ok","inference_ms":1500,"parsed_goal":"idle","hints_len":3,"hints":["killed Rascal Sprite in Teldrassil","killed Rascal Sprite in Teldrassil","killed Rascal Sprite in Teldrassil"]}
+{"bot_name":"Chalse","parsed_status":"ok","inference_ms":2197,"parsed_goal":"idle","hints_len":0,"hints":[]}
+{"bot_name":"Raries","parsed_status":"ok","inference_ms":1883,"parsed_goal":"idle","hints_len":0,"hints":[]}
+{"bot_name":"Shattanmo","parsed_status":"ok","inference_ms":1250,"parsed_goal":"idle","hints_len":0,"hints":[]}
+{"bot_name":"Tedil","parsed_status":"ok","inference_ms":2425,"parsed_goal":"idle","hints_len":0,"hints":[]}
+{"bot_name":"Braistou","parsed_status":"ok","inference_ms":2806,"parsed_goal":"idle","hints_len":1,"hints":["killed Defias Looter in Westfall"]}
+{"bot_name":"Gledyndezz","parsed_status":"ok","inference_ms":2732,"parsed_goal":"idle","hints_len":0,"hints":[]}
+{"bot_name":"Syni","parsed_status":"ok","inference_ms":2707,"parsed_goal":"idle","hints_len":0,"hints":[]}
+{"bot_name":"Rege","parsed_status":"ok","inference_ms":3661,"parsed_goal":"idle","hints_len":0,"hints":[]}
+{"bot_name":"Shanei","parsed_status":"ok","inference_ms":3967,"parsed_goal":"idle","hints_len":2,"hints":["killed Vale Moth in Azuremyst Isle","killed Vale Moth in Azuremyst Isle"]}
+{"bot_name":"Zennube","parsed_status":"ok","inference_ms":2260,"parsed_goal":"idle","hints_len":0,"hints":[]}
