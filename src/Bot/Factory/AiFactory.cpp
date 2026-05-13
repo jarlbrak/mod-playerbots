@@ -622,6 +622,9 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
             else
                 nonCombatEngine->addStrategy("move random", false);
 
+            if (sPlayerbotAIConfig.llmAgent.Enabled)
+                nonCombatEngine->addStrategy("llm agent", false);
+
             if (sPlayerbotAIConfig.randomBotJoinBG)
                 nonCombatEngine->addStrategy("bg", false);
 

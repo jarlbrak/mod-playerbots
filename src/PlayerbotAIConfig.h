@@ -16,6 +16,7 @@
 
 #include "DBCEnums.h"
 #include "SharedDefines.h"
+#include "Bot/LlmAgent/LlmAgentConfig.h"
 
 enum class BotCheatMask : uint32
 {
@@ -371,6 +372,7 @@ public:
     bool autoLearnTrainerSpells;
     bool autoDoQuests;
     bool enableNewRpgStrategy;
+    LlmAgentConfig llmAgent;
     std::unordered_map<NewRpgStatus, uint32> RpgStatusProbWeight;
     bool syncLevelWithPlayers;
     bool autoLearnQuestSpells;

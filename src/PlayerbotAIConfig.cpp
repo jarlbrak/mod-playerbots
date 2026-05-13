@@ -6,6 +6,16 @@
 #include "PlayerbotAIConfig.h"
 #include <iostream>
 #include "Config.h"
+#include "Bot/LlmAgent/LlmAgentManager.h"
+
+namespace {
+struct SConfigMgrSource {
+    template <typename T>
+    T Get(const char* key, T default_value) const {
+        return sConfigMgr->GetOption<T>(key, default_value);
+    }
+};
+}  // anon
 #include "NewRpgInfo.h"
 #include "PlayerbotDungeonRepository.h"
 #include "PlayerbotFactory.h"
@@ -651,6 +661,7 @@ bool PlayerbotAIConfig::Initialize()
     autoTeleportForLevel = sConfigMgr->GetOption<bool>("AiPlayerbot.AutoTeleportForLevel", false);
     autoDoQuests = sConfigMgr->GetOption<bool>("AiPlayerbot.AutoDoQuests", true);
     enableNewRpgStrategy = sConfigMgr->GetOption<bool>("AiPlayerbot.EnableNewRpgStrategy", true);
+    llmAgent = LoadLlmAgentConfig(SConfigMgrSource{});
 
     RpgStatusProbWeight[RPG_WANDER_RANDOM] = sConfigMgr->GetOption<int32>("AiPlayerbot.RpgStatusProbWeight.WanderRandom", 15);
     RpgStatusProbWeight[RPG_WANDER_NPC] = sConfigMgr->GetOption<int32>("AiPlayerbot.RpgStatusProbWeight.WanderNpc", 20);
@@ -709,6 +720,8 @@ bool PlayerbotAIConfig::Initialize()
     LOG_INFO("server.loading", "---------------------------------------");
     LOG_INFO("server.loading", "       mod-playerbots initialized      ");
     LOG_INFO("server.loading", "---------------------------------------");
+
+    LlmAgentManager::Instance().Start(llmAgent);
 
     return true;
 }

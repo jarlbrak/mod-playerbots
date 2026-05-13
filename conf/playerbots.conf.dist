@@ -2432,3 +2432,34 @@ AiPlayerbot.SummonAtInnkeepersEnabled = 1
 # Buffs will be applied on PP, Sindragosa and Lich King
 
 AiPlayerbot.EnableICCBuffs = 1
+
+####################################################################################################
+# LLM AGENT (Phase 1 — plumbing spike)
+#
+# Sends bot state digests to a local llama-server on every Idle transition.
+# When disabled (default), zero LlmAgent code path executes. When enabled,
+# the LLM call happens in parallel with the existing rule-based transition
+# but the LLM's output is NEVER applied — Phase 1 is log-only.
+#
+# All responses are written as JSON Lines to AiPlayerbot.LlmAgent.JsonlPath.
+
+# Default: 0 (disabled)
+AiPlayerbot.LlmAgent.Enabled = 0
+
+# llama-server base URL. POST goes to ${Endpoint}/v1/chat/completions.
+AiPlayerbot.LlmAgent.Endpoint = "http://127.0.0.1:8080"
+
+# Model label sent in the OpenAI-shaped request body.
+AiPlayerbot.LlmAgent.Model = "qwen2.5-7b-instruct-q4_k_m.gguf"
+
+# Worker threads (validated by Phase 0.5: slots=4 is goldilocks).
+AiPlayerbot.LlmAgent.WorkerThreads = 4
+
+# Per-request timeout. p95 measured at 2.7s; default leaves headroom.
+AiPlayerbot.LlmAgent.RequestTimeoutMs = 15000
+
+# Where the JSONL audit log goes (relative to worldserver CWD).
+AiPlayerbot.LlmAgent.JsonlPath = "logs/llm_agent_phase1.jsonl"
+
+# Override the default system prompt (leave empty to use the built-in).
+AiPlayerbot.LlmAgent.SystemPrompt = ""
