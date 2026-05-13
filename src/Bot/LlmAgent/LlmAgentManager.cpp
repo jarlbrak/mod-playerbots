@@ -62,6 +62,11 @@ void LlmAgentManager::Start(LlmAgentConfig cfg) {
     // Phase 2 component config
     selector_.Configure(cfg_.SamplePct, cfg_.SocialOptIn);
     events_.Configure(cfg_.EventLogSize);
+
+    memory_client_ = std::make_unique<MemoryHttpClient>(
+        cfg_.MemorySidecar_Endpoint,
+        std::chrono::milliseconds(cfg_.MemorySidecar_RequestTimeoutMs));
+
     if (!cfg_.Enabled) return;
 
     // Open JSONL (parent dir created if missing).

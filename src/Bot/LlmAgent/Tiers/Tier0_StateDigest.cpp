@@ -87,6 +87,7 @@ nlohmann::json BuildDigestJson(const LlmBotState& s) {
 #include "PlayerbotMgr.h"
 #include "ObjectAccessor.h"
 #include "AiObjectContext.h"
+#include "Memory/PersonalityCard.h"
 #include <algorithm>
 #include <utility>
 
@@ -235,6 +236,44 @@ LlmBotState SnapshotBot(PlayerbotAI* botAI) {
     // social.recent_whispers: empty in Phase 2; whisper hook (Task 9) drops
     // whisper content into event_log instead. If smoke data shows the LLM
     // wants the structured form, Phase 3 adds a second sliding window.
+
+    // ===== Phase 3: memory_hints + persona =====
+    {
+        auto& mgr = LlmAgentManager::Instance();
+        auto& mem = mgr.MemoryClient();
+        const auto& cfg = mgr.Config();
+        uint64_t guid = bot->GetGUID().GetRawValue();
+        size_t budget = cfg.MemorySidecar_HintMaxChars;
+
+        auto append_hints = [&](const std::string& entity) {
+            if (entity.empty()) return;
+            auto hints = mem.RecallAbout(
+                guid, entity, /*max_hops*/ 2, cfg.MemorySidecar_RecallTopK);
+            for (const auto& h : hints) {
+                if (budget == 0) return;
+                std::string clipped = h.size() <= budget ? h : h.substr(0, budget);
+                s.memory_hints.push_back(clipped);
+                budget -= clipped.size();
+            }
+        };
+
+        append_hints(s.location.zone);
+        for (size_t i = 0; i < s.social.nearby_humans.size() && i < 3 && budget > 0; ++i)
+            append_hints(s.social.nearby_humans[i].name);
+        if (s.goal.current == "DoQuest" && !s.goal.params_json.empty() && budget > 0) {
+            try {
+                auto p = nlohmann::json::parse(s.goal.params_json);
+                if (p.contains("title")) append_hints(p["title"].get<std::string>());
+            } catch (...) {}
+        }
+
+        // Persona: lazy stub on first access.
+        auto persona = mem.GetPersonality(guid);
+        if (!persona.has_value()) {
+            std::string stub = LlmAgentPersonality::StubPersonaText(s);
+            mem.SetPersonality(guid, stub);
+        }
+    }
 
     return s;
 }

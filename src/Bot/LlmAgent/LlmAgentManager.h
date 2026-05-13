@@ -7,6 +7,7 @@
 #include "Cooldown/BotCooldownMap.h"
 #include "EventBuffer/RecentEventBuffer.h"
 #include "Telemetry/LlmCounters.h"
+#include "Client/MemoryHttpClient.h"
 
 #include <atomic>
 #include <chrono>
@@ -14,6 +15,7 @@
 #include <cstdint>
 #include <deque>
 #include <fstream>
+#include <memory>
 #include <mutex>
 #include <stack>
 #include <string>
@@ -61,6 +63,7 @@ class LlmAgentManager {
     BotCooldownMap&     Cooldowns()       { return cooldowns_; }
     RecentEventBuffer&  Events()          { return events_; }
     LlmCounters&        Counters()        { return counters_; }
+    MemoryHttpClient&   MemoryClient()    { return *memory_client_; }
     LlmApplyMode        ApplyMode() const { return cfg_.ApplyMode; }
     bool IsInFlight(uint64_t bot_guid) const;
     bool HasPendingResults(uint64_t bot_guid) const;
@@ -80,6 +83,7 @@ class LlmAgentManager {
     BotCooldownMap                                cooldowns_;
     RecentEventBuffer                             events_;
     LlmCounters                                   counters_;
+    std::unique_ptr<MemoryHttpClient>             memory_client_;
     std::atomic<bool>                             running_{false};
     std::vector<std::thread>                      workers_;
 

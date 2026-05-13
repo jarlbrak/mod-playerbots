@@ -35,6 +35,16 @@ void OnWhisperReceived(Player* bot, Player* sender, const std::string& text) {
     std::ostringstream ev;
     ev << "received whisper from " << sender->GetName() << ": " << truncate_whisper(text);
     mgr.Events().Push(bot_guid, ev.str());
+
+    if (mgr.Config().MemorySidecar_EnableWrites) {
+        std::vector<std::string> entities;
+        entities.push_back(sender->GetName());
+        std::ostringstream txt;
+        txt << "received whisper from " << sender->GetName()
+            << ": " << truncate_whisper(text);
+        mgr.MemoryClient().Remember(
+            bot_guid, txt.str(), entities, /*salience*/ 0.7);
+    }
 #endif
     (void)bot; (void)sender; (void)text;  // silence unused-param in unit-test build
 }
@@ -46,6 +56,13 @@ void OnKill(Player* bot, const std::string& victim_name) {
     if (!mgr.Enabled()) return;
     const uint64_t bot_guid = bot->GetGUID().GetRawValue();
     mgr.Events().Push(bot_guid, "killed " + victim_name);
+
+    if (mgr.Config().MemorySidecar_EnableWrites) {
+        std::vector<std::string> entities;
+        entities.push_back(victim_name);
+        mgr.MemoryClient().Remember(
+            bot_guid, "killed " + victim_name, entities, /*salience*/ 0.1);
+    }
 #endif
     (void)bot; (void)victim_name;
 }
