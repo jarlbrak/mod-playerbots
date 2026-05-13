@@ -50,7 +50,11 @@ HEIMDAL_AMD_CARD_DEVICE = "/sys/class/drm/card1/device"  # confirmed in Task 9 s
 HEIMDAL_AMD_HWMON_DIR = "/sys/class/hwmon/hwmon2"  # amdgpu, for temp + power_cap
 
 # Thermal mitigations after first-attempt thermal trip:
-GPU_POWER_CAP_WATTS = 200  # was 264 W default; cap reduces sustained heat output
+# 237 W is the lowest power_cap_min the AMD firmware permits on this card
+# (264 W default; firmware refuses lower). Combined with fans pegged at PWM
+# max via gpu-fan-max.service, this is the maximum heat reduction we can
+# software-enforce.
+GPU_POWER_CAP_WATTS = 237
 INTER_CELL_COOLING_S = 30.0  # idle pause between (model x slots) cells
 
 
