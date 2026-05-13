@@ -390,6 +390,12 @@ public:
 
     bool OnPlayerbotCheckLFGQueue(lfg::Lfg5Guids const& guidsList) override
     {
+        // Upstream behavior: only allow proposals containing at least one human
+        // (or a real-player group). On a bot-only home server this blocks every
+        // candidate, so a config flag lets bots form groups among themselves.
+        if (sPlayerbotAIConfig.lfgAllowBotOnlyGroups)
+            return true;
+
         bool nonBotFound = false;
 
         for (ObjectGuid const& guid : guidsList.guids)
