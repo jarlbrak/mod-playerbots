@@ -182,11 +182,16 @@ LlmBotState SnapshotBot(PlayerbotAI* botAI) {
     }
 
     // Inventory highlights: bag-used summary; consumable detection deferred.
+    // Iterate slots directly (AC's Bag::GetItemCount requires an item-id arg).
     uint32 used = 0, total = 0;
     for (uint8 bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag) {
         if (Bag* b = bot->GetBagByPos(bag)) {
-            used += b->GetItemCount();
-            total += b->GetBagSize();
+            uint32 size = b->GetBagSize();
+            total += size;
+            for (uint32 slot = 0; slot < size; ++slot) {
+                if (b->GetItemByPos(slot))
+                    ++used;
+            }
         }
     }
     s.inventory.bag_used = std::to_string(used) + "/" + std::to_string(total);
