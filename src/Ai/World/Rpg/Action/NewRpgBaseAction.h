@@ -65,6 +65,23 @@ protected:
      */
     bool LocalQuestsRemaining();
 
+    // F4 P3: pick a material this bot should farm. Returns 0 if no suitable
+    // target found (caller falls back to legacy random grind).
+    uint32 SelectFarmTargetItem();
+
+    // F4 P3: populate sourceCreatureEntries + sourceGameobjectEntries for
+    // a given item id by querying creature_loot_template and
+    // gameobject_loot_template. Cached on first lookup per (botId, itemId).
+    void GetFarmSourcesForItem(uint32 itemId,
+                               std::vector<uint32>& outCreatureEntries,
+                               std::vector<uint32>& outGoEntries);
+
+    // F4 P3: find the nearest spawn (creature or gameobject) of any entry
+    // in the candidate lists, within ~2 zones of the bot. Returns invalid
+    // WorldPosition if none found.
+    WorldPosition SelectFarmSpawnPos(const std::vector<uint32>& creatureEntries,
+                                     const std::vector<uint32>& goEntries);
+
 protected:
     /* FOR MOVE FAR */
     const float pathFinderDis = 70.0f;
