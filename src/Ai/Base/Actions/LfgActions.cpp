@@ -141,10 +141,27 @@ bool LfgJoinAction::JoinLFG()
 
     if (bot->GetGUID().GetCounter() % 100 == 0)
     {
+        // Count type distribution in `selected` to detect mixed-type queue packets
+        // that AC's JoinLfg may reject as LFG_JOIN_DUNGEON_INVALID.
+        int t_random = 0, t_dungeon = 0, t_heroic = 0, t_raid = 0;
+        for (uint32 id : selected)
+        {
+            if (LFGDungeonEntry const* d = sLFGDungeonStore.LookupEntry(id))
+            {
+                switch (d->TypeID)
+                {
+                    case LFG_TYPE_RANDOM:  ++t_random;  break;
+                    case LFG_TYPE_DUNGEON: ++t_dungeon; break;
+                    case LFG_TYPE_HEROIC:  ++t_heroic;  break;
+                    case LFG_TYPE_RAID:    ++t_raid;    break;
+                    default: break;
+                }
+            }
+        }
         fprintf(stderr,
-            "[f3.5-diag] Bot %s lvl%u filter: selected=%zu, list=%zu\n",
+            "[f3.5-diag] Bot %s lvl%u filter: selected=%zu (random=%d, dungeon=%d, heroic=%d, raid=%d)\n",
             bot->GetName().c_str(), bot->GetLevel(),
-            selected.size(), list.size());
+            selected.size(), t_random, t_dungeon, t_heroic, t_raid);
         fflush(stderr);
     }
 
@@ -153,6 +170,15 @@ bool LfgJoinAction::JoinLFG()
 
     if (list.empty())
         return false;
+
+    // Pre-packet trace
+    if (bot->GetGUID().GetCounter() % 100 == 0)
+    {
+        fprintf(stderr,
+            "[f3.5-diag] Bot %s lvl%u: queuing CMSG_LFG_JOIN with %zu dungeon(s)\n",
+            bot->GetName().c_str(), bot->GetLevel(), list.size());
+        fflush(stderr);
+    }
 
     bool many = list.size() > 1;
     LFGDungeonEntry const* dungeon = sLFGDungeonStore.LookupEntry(*list.begin());
@@ -222,6 +248,15 @@ bool LfgRoleCheckAction::Execute(Event /*event*/)
 bool LfgAcceptAction::Execute(Event event)
 {
     uint32 id = AI_VALUE(uint32, "lfg proposal");
+
+    // Diagnostic: did AC core ever send us a proposal back?
+    if (bot->GetGUID().GetCounter() % 100 == 0 && (id != 0 || !event.getPacket().empty()))
+    {
+        fprintf(stderr,
+            "[f3.5-diag] Bot %s LfgAcceptAction: id=%u, packet.empty=%d\n",
+            bot->GetName().c_str(), id, (int)event.getPacket().empty());
+        fflush(stderr);
+    }
 
     // Try accept if already stored
     if (id)
