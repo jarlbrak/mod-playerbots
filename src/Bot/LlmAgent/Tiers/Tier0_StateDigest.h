@@ -78,6 +78,7 @@ struct LlmBotState {
     InventoryHighlights         inventory;
     BotSocial                   social;
     std::vector<std::string>    event_log;
+    std::vector<std::string>    memory_hints;
 };
 
 nlohmann::json BuildDigestJson(const LlmBotState& s);

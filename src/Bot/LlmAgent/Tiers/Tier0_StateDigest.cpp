@@ -69,7 +69,7 @@ nlohmann::json BuildDigestJson(const LlmBotState& s) {
     };
 
     j["event_log"] = s.event_log;
-    j["memory_hints"] = nlohmann::json::array();  // Phase 1: always empty
+    j["memory_hints"] = s.memory_hints;
 
     return j;
 }
