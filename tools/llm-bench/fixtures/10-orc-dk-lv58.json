@@ -1,0 +1,54 @@
+{
+  "self": {
+    "name": "Ashbone",
+    "race": "orc",
+    "class": "death knight",
+    "spec": "blood",
+    "level": 58,
+    "hp_pct": 100,
+    "mana_pct": null,
+    "gold_copper": 1200,
+    "is_in_combat": false,
+    "is_resting": false,
+    "is_dead": false
+  },
+  "location": {
+    "map": "Eastern Plaguelands",
+    "zone": "Eastern Plaguelands",
+    "subzone": "Light's Hope Chapel",
+    "near_npcs": ["Highlord Darion Mograine"],
+    "position": [2266.3, -5350.7, 88.2]
+  },
+  "goal": {
+    "current": "idle",
+    "params": {},
+    "progress_pct": 0,
+    "elapsed_minutes": 0,
+    "ttl_minutes": 0
+  },
+  "quest_log": [
+    {"id": 12779, "title": "The Light of Dawn", "progress": "complete, turn in"}
+  ],
+  "inventory_highlights": {
+    "bag_used": "8/16",
+    "junk_value_copper": 0,
+    "consumables": [],
+    "gear_vs_level_score": 0.55
+  },
+  "social": {
+    "in_group": false,
+    "group_members": [],
+    "guild": null,
+    "nearby_humans": [],
+    "recent_whispers": []
+  },
+  "event_log": [
+    "Completed Scarlet Enclave starter zone",
+    "Phased to Light's Hope Chapel",
+    "Witnessed The Light of Dawn",
+    "Freed from the Lich King",
+    "Quest ready to turn in: The Light of Dawn",
+    "First moments of freedom — no current goal"
+  ],
+  "memory_hints": []
+}

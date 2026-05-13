@@ -1,0 +1,16 @@
+# T1 goal-setter output grammar (mirrors goal_schema.json).
+# Whitespace is handled by ws/ws-?; key order is fixed for cache-friendliness.
+
+root        ::= "{" ws "\"goal\":" ws goal "," ws "\"params\":" ws params "," ws "\"ttl_minutes\":" ws integer "," ws "\"reasoning\":" ws string ws "}" ws
+
+goal        ::= "\"idle\"" | "\"go_grind\"" | "\"go_camp\"" | "\"wander_npc\"" | "\"wander_random\"" | "\"do_quest\"" | "\"travel_flight\"" | "\"rest\"" | "\"outdoor_pvp\""
+
+params      ::= "{" ws ( pair ( "," ws pair )* )? ws "}"
+pair        ::= string ws ":" ws value
+value       ::= string | integer | number | "true" | "false" | "null" | params | array
+array       ::= "[" ws ( value ( "," ws value )* )? ws "]"
+
+string      ::= "\"" ( [^"\\\x00-\x1F] | "\\" ( ["\\/bfnrt] | "u" [0-9a-fA-F]{4} ) )* "\""
+integer     ::= "-"? ( "0" | [1-9] [0-9]* )
+number      ::= integer ( "." [0-9]+ )? ( [eE] [-+]? [0-9]+ )?
+ws          ::= [ \t\n\r]*

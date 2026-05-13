@@ -1,0 +1,54 @@
+{
+  "self": {
+    "name": "Moonweave",
+    "race": "night elf",
+    "class": "priest",
+    "spec": "holy",
+    "level": 30,
+    "hp_pct": 95,
+    "mana_pct": 88,
+    "gold_copper": 28400,
+    "is_in_combat": false,
+    "is_resting": false,
+    "is_dead": false
+  },
+  "location": {
+    "map": "Kalimdor",
+    "zone": "Ashenvale",
+    "subzone": "Astranaar",
+    "near_npcs": ["Innkeeper Kimlya", "Sentinel Velene Starstrike"],
+    "position": [2724.5, -377.6, 108.2]
+  },
+  "goal": {
+    "current": "idle",
+    "params": {},
+    "progress_pct": 0,
+    "elapsed_minutes": 0,
+    "ttl_minutes": 0
+  },
+  "quest_log": [],
+  "inventory_highlights": {
+    "bag_used": "12/20",
+    "junk_value_copper": 240,
+    "consumables": ["10x light feather"],
+    "gear_vs_level_score": 0.69
+  },
+  "social": {
+    "in_group": true,
+    "group_members": ["Bearclaw", "Quickshot"],
+    "guild": null,
+    "nearby_humans": [
+      {"name": "Bearclaw", "level": 31, "distance": 3.4},
+      {"name": "Quickshot", "level": 30, "distance": 5.0}
+    ],
+    "recent_whispers": []
+  },
+  "event_log": [
+    "Joined party of Bearclaw",
+    "Bearclaw said: what now?",
+    "Quickshot said: blackfathom?"
+  ],
+  "memory_hints": [
+    "Bearclaw: druid you've grouped with twice (helpful, salience 0.6)"
+  ]
+}

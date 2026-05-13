@@ -1,0 +1,50 @@
+{
+  "self": {
+    "name": "Grimaxe",
+    "race": "orc",
+    "class": "warrior",
+    "spec": "arms",
+    "level": 10,
+    "hp_pct": 92,
+    "mana_pct": null,
+    "gold_copper": 1240,
+    "is_in_combat": false,
+    "is_resting": true,
+    "is_dead": false
+  },
+  "location": {
+    "map": "Kalimdor",
+    "zone": "Durotar",
+    "subzone": "Razor Hill",
+    "near_npcs": ["Innkeeper Grosk", "Gar'Thok"],
+    "position": [319.6, -4724.5, 25.0]
+  },
+  "goal": {
+    "current": "idle",
+    "params": {},
+    "progress_pct": 0,
+    "elapsed_minutes": 0,
+    "ttl_minutes": 0
+  },
+  "quest_log": [
+    {"id": 786, "title": "The Demon Scarred Cloak", "progress": "0/1"}
+  ],
+  "inventory_highlights": {
+    "bag_used": "8/16",
+    "junk_value_copper": 80,
+    "consumables": [],
+    "gear_vs_level_score": 0.71
+  },
+  "social": {
+    "in_group": false,
+    "group_members": [],
+    "guild": null,
+    "nearby_humans": [],
+    "recent_whispers": []
+  },
+  "event_log": [
+    "Rested at Razor Hill inn (+0.5 XP/sec)",
+    "Accepted quest: The Demon Scarred Cloak"
+  ],
+  "memory_hints": []
+}

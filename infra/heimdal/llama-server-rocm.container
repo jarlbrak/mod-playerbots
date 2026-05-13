@@ -1,0 +1,29 @@
+[Unit]
+Description=llama-server (ROCm) for Phase 0.5 LLM-agent ROCm comparison
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Image=ghcr.io/ggml-org/llama.cpp:server-rocm
+PublishPort=127.0.0.1:8080:8080
+Volume=/var/lib/llama-models:/models:Z,ro
+EnvironmentFile=/etc/llama-server-rocm.env
+AddDevice=/dev/kfd
+AddDevice=/dev/dri/renderD128
+# Numeric GIDs for host render (105) and video (39). See infra/heimdal/README.md
+# under Quadlet quirks for why this is numeric rather than named.
+GroupAdd=105
+GroupAdd=39
+Exec=--host 0.0.0.0 --port 8080 --model /models/${LLAMA_MODEL} --parallel ${LLAMA_SLOTS} --n-gpu-layers 999 --ctx-size 8192 --batch-size 512 --no-mmap
+
+[Service]
+# Load env-file at unit level too so ${LLAMA_MODEL}/${LLAMA_SLOTS} in Exec= get
+# substituted. Same pattern as the Vulkan unit.
+EnvironmentFile=/etc/llama-server-rocm.env
+Restart=on-failure
+RestartSec=5
+# ROCm initialization is slower than Vulkan; 5 min is defensive.
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target
