@@ -1,6 +1,6 @@
 #include "Triggers/LlmReplanIdleTrigger.h"
 #include "LlmAgentManager.h"
-#include "Playerbots/PlayerbotAI.h"
+#include "PlayerbotAI.h"
 #include "NewRpgInfo.h"
 
 bool LlmReplanIdleTrigger::IsActive() {

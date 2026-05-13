@@ -79,7 +79,7 @@ nlohmann::json BuildDigestJson(const BotState& s) {
 // ===========================================================================
 #ifndef LLMAGENT_UNIT_TESTS
 
-#include "Playerbots/PlayerbotAI.h"
+#include "PlayerbotAI.h"
 #include "Player.h"
 #include "Map.h"
 #include "QuestDef.h"

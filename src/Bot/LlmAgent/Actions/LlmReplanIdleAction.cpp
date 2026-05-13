@@ -2,7 +2,7 @@
 #include "LlmAgentManager.h"
 #include "Tiers/Tier0_StateDigest.h"
 #include "Schemas/Goal.h"
-#include "Playerbots/PlayerbotAI.h"
+#include "PlayerbotAI.h"
 #include "Log.h"
 #include "NewRpgInfo.h"
 
