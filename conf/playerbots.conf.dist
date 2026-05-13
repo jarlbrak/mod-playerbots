@@ -2499,3 +2499,30 @@ AiPlayerbot.LlmAgent.FallbackCooldownMs = 300000
 # Ring buffer length for the digest's event_log field. 0 disables.
 # Default: 20
 AiPlayerbot.LlmAgent.EventLogSize = 20
+
+####################################################################################################
+# MEMORY SIDECAR (Phase 3)
+#
+# Per-bot memory service. When the sidecar is unreachable, recalls return
+# empty hints and writes are silently dropped — gameplay is unaffected.
+
+# Sidecar HTTP endpoint.
+# Default: http://127.0.0.1:8090
+AiPlayerbot.MemorySidecar.Endpoint = "http://127.0.0.1:8090"
+
+# Per-request timeout (ms). Tight on purpose so T0 digest build stays snappy.
+# Default: 2000
+AiPlayerbot.MemorySidecar.RequestTimeoutMs = 2000
+
+# Allow kill/whisper hooks to POST to /memory/remember. Set 0 to make memory
+# read-only (useful for A/B between "live data" and "stale corpus").
+# Default: 1
+AiPlayerbot.MemorySidecar.EnableWrites = 1
+
+# Hints per recall_about call.
+# Default: 3
+AiPlayerbot.MemorySidecar.RecallTopK = 3
+
+# Cumulative hint character budget per digest.
+# Default: 1200
+AiPlayerbot.MemorySidecar.HintMaxChars = 1200
