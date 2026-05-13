@@ -43,6 +43,8 @@ class CellSummary:
     adherence: float
     vram_idle_mb: int
     vram_loaded_mb: int
+    gpu_edge_c_loaded: float
+    gpu_junction_c_loaded: float
 
 
 def write_results_csv(path: Path, rows: list[ResultRow]) -> None:
@@ -89,6 +91,8 @@ def write_summary_md(
         "adherence",
         "VRAM idle MB",
         "VRAM loaded MB",
+        "edge °C",
+        "junction °C",
     ]
     rows = [
         [
@@ -105,6 +109,8 @@ def write_summary_md(
             f"{c.adherence * 100:.1f}%",
             c.vram_idle_mb,
             c.vram_loaded_mb,
+            f"{c.gpu_edge_c_loaded:.1f}",
+            f"{c.gpu_junction_c_loaded:.1f}",
         ]
         for c in cells
     ]

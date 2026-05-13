@@ -19,6 +19,7 @@ from llmbench.aggregate import (
     prefill_tokens_per_sec,
 )
 from llmbench.driver import run_burst, run_steady_state
+from llmbench.gpu import restore_power_cap, sample_gpu_temps, set_power_cap_watts
 from llmbench.output import CellSummary, ResultRow, write_results_csv, write_summary_md
 from llmbench.request import build_request
 from llmbench.server import stop_server, wait_for_health, write_env_and_restart
@@ -42,10 +43,15 @@ MODELS = [
 PARALLEL_SLOTS = [1, 4, 8]
 GRAMMAR_MODES = ["json_schema", "gbnf"]
 STEADY_RPS = 1.0
-STEADY_DURATION_S = 120.0
+STEADY_DURATION_S = 60.0  # was 120 s; halved after thermal trip in first run attempt
 BURST_REQUESTS = 50
 REQUEST_TIMEOUT_S = 30.0
 HEIMDAL_AMD_CARD_DEVICE = "/sys/class/drm/card1/device"  # confirmed in Task 9 step 5
+HEIMDAL_AMD_HWMON_DIR = "/sys/class/hwmon/hwmon2"  # amdgpu, for temp + power_cap
+
+# Thermal mitigations after first-attempt thermal trip:
+GPU_POWER_CAP_WATTS = 200  # was 264 W default; cap reduces sustained heat output
+INTER_CELL_COOLING_S = 30.0  # idle pause between (model x slots) cells
 
 
 # --- helpers -----------------------------------------------------------------
@@ -76,15 +82,18 @@ def aggregate_cell(
     phase: str,
     vram_idle_mb: int,
     vram_loaded_mb: int,
+    gpu_edge_c_loaded: float,
+    gpu_junction_c_loaded: float,
 ) -> CellSummary:
     cell_rows = [r for r in rows if r.model == model and r.grammar == grammar and r.slots == slots and r.phase == phase]
     if not cell_rows:
-        # empty cell — still emit a row so the table is complete
         return CellSummary(
             model=model, grammar=grammar, slots=slots, phase=phase,
             n_requests=0, p50_wall_ms=0, p95_wall_ms=0, p99_wall_ms=0,
             decode_toks_per_sec=0, prefill_toks_per_sec=0, adherence=0,
             vram_idle_mb=vram_idle_mb, vram_loaded_mb=vram_loaded_mb,
+            gpu_edge_c_loaded=gpu_edge_c_loaded,
+            gpu_junction_c_loaded=gpu_junction_c_loaded,
         )
     wall = [r.wall_clock_ms for r in cell_rows]
     decode_rates = [
@@ -111,7 +120,16 @@ def aggregate_cell(
         adherence=adherence_rate([r.grammar_valid for r in cell_rows]),
         vram_idle_mb=vram_idle_mb,
         vram_loaded_mb=vram_loaded_mb,
+        gpu_edge_c_loaded=gpu_edge_c_loaded,
+        gpu_junction_c_loaded=gpu_junction_c_loaded,
     )
+
+
+def flush_incremental(out_dir: Path, all_rows: list[ResultRow], summaries: list[CellSummary], run_metadata: dict) -> None:
+    """Write current state of results.csv and summary.md. Called after each cell."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    write_results_csv(out_dir / "results.csv", all_rows)
+    write_summary_md(out_dir / "summary.md", summaries, run_metadata)
 
 
 # --- main -------------------------------------------------------------------
@@ -138,100 +156,137 @@ async def run_matrix(
     grammars_to_run = ["json_schema"] if dry_run else GRAMMAR_MODES
     steady_duration = 10.0 if dry_run else STEADY_DURATION_S
     burst_n = 5 if dry_run else BURST_REQUESTS
+    cooling_s = 5.0 if dry_run else INTER_CELL_COOLING_S
 
-    async with httpx.AsyncClient(http2=True) as client:
-        for model in models_to_run:
-            for slots in slots_to_run:
-                click.echo(f"[matrix] starting cell model={model.label} slots={slots}")
-                write_env_and_restart(model.gguf_filename, slots)
-                await wait_for_health(endpoint)
-                vram_idle_mb, vram_total_mb = sample_vram(HEIMDAL_AMD_CARD_DEVICE)
-                click.echo(f"[matrix]   /health 200; vram_idle={vram_idle_mb}MB / {vram_total_mb}MB")
+    run_metadata = {
+        "date": date.today().isoformat(),
+        "backend": "vulkan",
+        "endpoint": endpoint,
+        "models": ",".join(m.label for m in models_to_run),
+        "slots": ",".join(str(s) for s in slots_to_run),
+        "grammars": ",".join(grammars_to_run),
+        "steady_rps": STEADY_RPS,
+        "steady_duration_s": steady_duration,
+        "burst_requests": burst_n,
+        "gpu_power_cap_watts": GPU_POWER_CAP_WATTS,
+        "inter_cell_cooling_s": cooling_s,
+        "dry_run": dry_run,
+    }
 
-                vram_loaded_mb_for_cell: int | None = None
-                for grammar in grammars_to_run:
-                    click.echo(f"[matrix]   grammar={grammar} steady...")
-                    builder = functools.partial(
-                        build_request,
-                        grammar_mode=grammar,  # type: ignore[arg-type]
-                        schema=schema if grammar == "json_schema" else None,
-                        gbnf=gbnf if grammar == "gbnf" else None,
-                        max_tokens=256,
-                        temperature=0.3,
+    # Apply GPU power cap before any GPU work; restore on exit.
+    click.echo(f"[matrix] setting GPU power cap to {GPU_POWER_CAP_WATTS} W")
+    set_power_cap_watts(GPU_POWER_CAP_WATTS, hwmon_dir=HEIMDAL_AMD_HWMON_DIR)
+
+    try:
+        async with httpx.AsyncClient(http2=True) as client:
+            cell_idx = 0
+            total_cells = len(models_to_run) * len(slots_to_run)
+            for model in models_to_run:
+                for slots in slots_to_run:
+                    cell_idx += 1
+                    click.echo(f"[matrix] starting cell {cell_idx}/{total_cells} model={model.label} slots={slots}")
+                    write_env_and_restart(model.gguf_filename, slots)
+                    await wait_for_health(endpoint)
+                    vram_idle_mb, vram_total_mb = sample_vram(HEIMDAL_AMD_CARD_DEVICE)
+                    idle_temps = sample_gpu_temps(HEIMDAL_AMD_HWMON_DIR)
+                    click.echo(
+                        f"[matrix]   /health 200; vram_idle={vram_idle_mb}MB / {vram_total_mb}MB; "
+                        f"edge={idle_temps['edge_c']:.1f}C junction={idle_temps['junction_c']:.1f}C"
                     )
-                    # mid-steady VRAM sample scheduled by a timer
-                    steady_task = asyncio.create_task(
-                        run_steady_state(
+
+                    vram_loaded_mb_for_cell: int | None = None
+                    loaded_temps: dict[str, float] = {"edge_c": float("nan"), "junction_c": float("nan"), "mem_c": float("nan")}
+
+                    for grammar in grammars_to_run:
+                        click.echo(f"[matrix]   grammar={grammar} steady...")
+                        builder = functools.partial(
+                            build_request,
+                            grammar_mode=grammar,  # type: ignore[arg-type]
+                            schema=schema if grammar == "json_schema" else None,
+                            gbnf=gbnf if grammar == "gbnf" else None,
+                            max_tokens=256,
+                            temperature=0.3,
+                        )
+                        steady_task = asyncio.create_task(
+                            run_steady_state(
+                                client=client,
+                                endpoint=endpoint,
+                                model=model.label,
+                                grammar=grammar,
+                                slots=slots,
+                                phase_label="steady",
+                                fixtures=fixtures,
+                                request_builder=lambda fx, b=builder: b(fixture=fx),
+                                schema=schema,
+                                target_rps=STEADY_RPS,
+                                duration_s=steady_duration,
+                                timeout_s=REQUEST_TIMEOUT_S,
+                            )
+                        )
+                        await asyncio.sleep(min(steady_duration / 2, 60.0))
+                        if vram_loaded_mb_for_cell is None:
+                            used_mb, _total = sample_vram(HEIMDAL_AMD_CARD_DEVICE)
+                            vram_loaded_mb_for_cell = used_mb
+                            loaded_temps = sample_gpu_temps(HEIMDAL_AMD_HWMON_DIR)
+                            click.echo(
+                                f"[matrix]   mid-steady: vram_loaded={vram_loaded_mb_for_cell}MB; "
+                                f"edge={loaded_temps['edge_c']:.1f}C junction={loaded_temps['junction_c']:.1f}C mem={loaded_temps['mem_c']:.1f}C"
+                            )
+                        steady_rows = await steady_task
+                        all_rows.extend(steady_rows)
+
+                        click.echo(f"[matrix]   grammar={grammar} burst...")
+                        burst_rows = await run_burst(
                             client=client,
                             endpoint=endpoint,
                             model=model.label,
                             grammar=grammar,
                             slots=slots,
-                            phase_label="steady",
                             fixtures=fixtures,
                             request_builder=lambda fx, b=builder: b(fixture=fx),
                             schema=schema,
-                            target_rps=STEADY_RPS,
-                            duration_s=steady_duration,
+                            n_requests=burst_n,
+                            concurrency=slots * 2,
                             timeout_s=REQUEST_TIMEOUT_S,
                         )
-                    )
-                    await asyncio.sleep(min(60.0, steady_duration / 2))
-                    if vram_loaded_mb_for_cell is None:
-                        used_mb, _total = sample_vram(HEIMDAL_AMD_CARD_DEVICE)
-                        vram_loaded_mb_for_cell = used_mb
-                        click.echo(f"[matrix]   vram_loaded={vram_loaded_mb_for_cell}MB")
-                    steady_rows = await steady_task
-                    all_rows.extend(steady_rows)
+                        all_rows.extend(burst_rows)
 
-                    click.echo(f"[matrix]   grammar={grammar} burst...")
-                    burst_rows = await run_burst(
-                        client=client,
-                        endpoint=endpoint,
-                        model=model.label,
-                        grammar=grammar,
-                        slots=slots,
-                        fixtures=fixtures,
-                        request_builder=lambda fx, b=builder: b(fixture=fx),
-                        schema=schema,
-                        n_requests=burst_n,
-                        concurrency=slots * 2,
-                        timeout_s=REQUEST_TIMEOUT_S,
-                    )
-                    all_rows.extend(burst_rows)
-
-                    summaries.append(
-                        aggregate_cell(
-                            all_rows, model.label, grammar, slots, "steady",
-                            vram_idle_mb, vram_loaded_mb_for_cell or 0,
+                        summaries.append(
+                            aggregate_cell(
+                                all_rows, model.label, grammar, slots, "steady",
+                                vram_idle_mb, vram_loaded_mb_for_cell or 0,
+                                loaded_temps["edge_c"], loaded_temps["junction_c"],
+                            )
                         )
-                    )
-                    summaries.append(
-                        aggregate_cell(
-                            all_rows, model.label, grammar, slots, "burst",
-                            vram_idle_mb, vram_loaded_mb_for_cell or 0,
+                        summaries.append(
+                            aggregate_cell(
+                                all_rows, model.label, grammar, slots, "burst",
+                                vram_idle_mb, vram_loaded_mb_for_cell or 0,
+                                loaded_temps["edge_c"], loaded_temps["junction_c"],
+                            )
                         )
-                    )
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    write_results_csv(out_dir / "results.csv", all_rows)
-    write_summary_md(
-        out_dir / "summary.md",
-        summaries,
-        run_metadata={
-            "date": date.today().isoformat(),
-            "backend": "vulkan",
-            "endpoint": endpoint,
-            "models": ",".join(m.label for m in models_to_run),
-            "slots": ",".join(str(s) for s in slots_to_run),
-            "grammars": ",".join(grammars_to_run),
-            "steady_rps": STEADY_RPS,
-            "steady_duration_s": steady_duration,
-            "burst_requests": burst_n,
-            "dry_run": dry_run,
-        },
-    )
-    click.echo(f"[matrix] done — results in {out_dir}/")
+                    # Incremental flush after every (model x slots) cell — survives crashes.
+                    flush_incremental(out_dir, all_rows, summaries, run_metadata)
+                    click.echo(f"[matrix]   cell {cell_idx} flushed to {out_dir}/")
+
+                    # Inter-cell cooling pause — let the GPU shed heat before the next cell.
+                    if cell_idx < total_cells:
+                        post_temps = sample_gpu_temps(HEIMDAL_AMD_HWMON_DIR)
+                        click.echo(
+                            f"[matrix]   cooling pause {cooling_s:.0f}s; "
+                            f"edge={post_temps['edge_c']:.1f}C junction={post_temps['junction_c']:.1f}C"
+                        )
+                        await asyncio.sleep(cooling_s)
+
+        flush_incremental(out_dir, all_rows, summaries, run_metadata)
+        click.echo(f"[matrix] done — results in {out_dir}/")
+    finally:
+        click.echo("[matrix] restoring GPU power cap to hardware default")
+        try:
+            restore_power_cap(hwmon_dir=HEIMDAL_AMD_HWMON_DIR)
+        except Exception as e:
+            click.echo(f"[matrix] WARNING: could not restore power cap: {e}", err=True)
 
 
 @click.command()
@@ -240,7 +295,7 @@ async def run_matrix(
 @click.option("--schema-path", default="schemas/goal_schema.json", type=click.Path(exists=True, path_type=Path))
 @click.option("--gbnf-path", default="grammars/goal.gbnf", type=click.Path(exists=True, path_type=Path))
 @click.option("--out-dir", required=True, type=click.Path(path_type=Path))
-@click.option("--dry-run", is_flag=True, help="Smoke test: 1 model, 4 slots, json_schema only, 10 s steady, 5 burst.")
+@click.option("--dry-run", is_flag=True, help="Smoke test: 1 model, 4 slots, json_schema only, 10 s steady, 5 burst, 5 s cooling.")
 @click.option("--stop-server-on-exit", is_flag=True, help="Stop llama-server after the run.")
 def main(
     endpoint: str,

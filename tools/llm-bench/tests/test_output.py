@@ -64,6 +64,8 @@ def test_write_summary_md_renders_cells(tmp_path):
             adherence=0.975,
             vram_idle_mb=6800,
             vram_loaded_mb=9900,
+            gpu_edge_c_loaded=72.5,
+            gpu_junction_c_loaded=88.0,
         )
     ]
     out = tmp_path / "summary.md"
@@ -76,3 +78,6 @@ def test_write_summary_md_renders_cells(tmp_path):
     assert "9900" in text  # VRAM loaded
     assert "2026-05-12" in text
     assert "vulkan" in text
+    # tabulate may drop trailing .0 on whole-number floats; match either form
+    assert "88.0" in text or " 88 " in text  # junction temp under load
+    assert "72.5" in text  # edge temp under load
