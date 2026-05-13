@@ -1301,3 +1301,120 @@ bool NewRpgBaseAction::LocalQuestsRemaining()
 
     return false;
 }
+
+uint32 NewRpgBaseAction::SelectFarmTargetItem()
+{
+    // Strategy: pick a random "common bracket-appropriate" material drop.
+    // The pool below is intentionally small for bracket-1 (<=25). Extend as
+    // level caps rise. In a follow-up we can bias by (a) profession the bot
+    // has trained, (b) current AH supply, but P3 ships with uniform pick.
+    static const std::vector<uint32> bracketLowMaterials = {
+        2589,   // Linen Cloth
+        2592,   // Wool Cloth
+        2934,   // Ruined Leather Scraps
+        2318,   // Light Leather
+        2840,   // Copper Ore
+        765,    // Silverleaf
+        2447,   // Peacebloom
+        2449,   // Earthroot
+        785,    // Mageroyal
+    };
+
+    if (bracketLowMaterials.empty())
+        return 0;
+
+    return bracketLowMaterials[urand(0, bracketLowMaterials.size() - 1)];
+}
+
+void NewRpgBaseAction::GetFarmSourcesForItem(uint32 itemId,
+                                             std::vector<uint32>& outCreatureEntries,
+                                             std::vector<uint32>& outGoEntries)
+{
+    outCreatureEntries.clear();
+    outGoEntries.clear();
+
+    // creature_loot_template: entry = creature template id, item = item id.
+    // ChanceOrQuestChance > 0 filters out quest-required only drops where
+    // possible — we want farmable loot.
+    QueryResult cres = WorldDatabase.Query(
+        "SELECT DISTINCT entry FROM creature_loot_template "
+        "WHERE item = {} AND ChanceOrQuestChance > 0",
+        itemId);
+    if (cres)
+    {
+        do
+        {
+            Field* f = cres->Fetch();
+            outCreatureEntries.push_back(f[0].Get<uint32>());
+        } while (cres->NextRow());
+    }
+
+    // gameobject_loot_template -> via gameobject_template.data1 (loot id).
+    // type 3 = chest, type 25 = gathering node (herb/mining). Both are loot
+    // containers eligible for the bot to interact with.
+    QueryResult gres = WorldDatabase.Query(
+        "SELECT DISTINCT gt.entry "
+        "FROM gameobject_template gt "
+        "JOIN gameobject_loot_template glt ON glt.entry = gt.data1 "
+        "WHERE glt.item = {} AND glt.ChanceOrQuestChance > 0 "
+        "AND gt.type IN (3, 25)",
+        itemId);
+    if (gres)
+    {
+        do
+        {
+            Field* f = gres->Fetch();
+            outGoEntries.push_back(f[0].Get<uint32>());
+        } while (gres->NextRow());
+    }
+}
+
+WorldPosition NewRpgBaseAction::SelectFarmSpawnPos(const std::vector<uint32>& creatureEntries,
+                                                    const std::vector<uint32>& goEntries)
+{
+    // Allow ~2000 yards of search — wider than the legacy 500-yard grind
+    // picker, because we're committing to a farming run.
+    const float maxDist = 2000.0f;
+    float bestDist = maxDist;
+    WorldPosition best{};
+
+    if (!creatureEntries.empty())
+    {
+        auto const& cspawns = sObjectMgr->GetAllCreatureData();
+        for (auto const& kv : cspawns)
+        {
+            CreatureData const& data = kv.second;
+            if (data.mapid != bot->GetMapId())
+                continue;
+            if (std::find(creatureEntries.begin(), creatureEntries.end(), data.id1) == creatureEntries.end())
+                continue;
+            float dist = bot->GetExactDist(data.posX, data.posY, data.posZ);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                best = WorldPosition(data.mapid, data.posX, data.posY, data.posZ);
+            }
+        }
+    }
+
+    if (!goEntries.empty())
+    {
+        auto const& gspawns = sObjectMgr->GetAllGameObjectData();
+        for (auto const& kv : gspawns)
+        {
+            GameObjectData const& data = kv.second;
+            if (data.mapid != bot->GetMapId())
+                continue;
+            if (std::find(goEntries.begin(), goEntries.end(), data.id) == goEntries.end())
+                continue;
+            float dist = bot->GetExactDist(data.posX, data.posY, data.posZ);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                best = WorldPosition(data.mapid, data.posX, data.posY, data.posZ);
+            }
+        }
+    }
+
+    return best;
+}

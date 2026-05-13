@@ -16,10 +16,14 @@ struct NewRpgInfo
     NewRpgInfo() : data(Idle{}) {}
     ~NewRpgInfo() = default;
 
-    // RPG_GO_GRIND
+    // RPG_GO_GRIND (F4 P3: farming variant)
     struct GoGrind
     {
         WorldPosition pos{};
+        uint32 targetItemId{0};   // 0 = legacy random-grind behavior
+        uint32 lastTargetCheck{0};
+        std::vector<uint32> sourceCreatureEntries;   // mobs that drop targetItemId
+        std::vector<uint32> sourceGameobjectEntries; // nodes that yield targetItemId
     };
     // RPG_GO_CAMP
     struct GoCamp
