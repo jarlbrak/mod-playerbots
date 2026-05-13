@@ -34,6 +34,7 @@
 #include "cmath"
 #include "BattleGroundTactics.h"
 #include "Bot/LlmAgent/LlmAgentManager.h"
+#include "Bot/LlmAgent/Hooks/LlmAgentHooks.h"
 
 class PlayerbotsDatabaseScript : public DatabaseScript
 {
@@ -414,6 +415,11 @@ public:
 
     void OnPlayerbotCheckKillTask(Player* player, Unit* victim) override
     {
+        if (player && victim) {
+            std::string victim_name = victim->GetName();
+            if (victim_name.empty()) victim_name = "unknown";
+            LlmAgentHooks::OnKill(player, victim_name);
+        }
         if (player)
             GuildTaskMgr::instance().CheckKillTask(player, victim);
     }

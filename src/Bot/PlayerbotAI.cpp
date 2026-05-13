@@ -55,6 +55,7 @@
 #include "UpdateTime.h"
 #include "Vehicle.h"
 #include "../../../../src/server/scripts/Spells/spell_dk.cpp"
+#include "Bot/LlmAgent/Hooks/LlmAgentHooks.h"
 
 const int SPELL_TITAN_GRIP = 49152;
 
@@ -590,6 +591,7 @@ void PlayerbotAI::HandleCommands()
 std::map<std::string, ChatMsg> chatMap;
 void PlayerbotAI::HandleCommand(uint32 type, const std::string& text, Player& fromPlayer, const uint32 lang)
 {
+    LlmAgentHooks::OnWhisperReceived(bot, &fromPlayer, text);
     if (!bot)
         return;
 
