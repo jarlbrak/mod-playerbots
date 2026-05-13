@@ -57,6 +57,13 @@ protected:
     bool SelectRandomFlightTaxiNode(ObjectGuid& flightMaster, std::vector<uint32>& path);
     bool RandomChangeStatus(std::vector<NewRpgStatus> candidateStatus);
     bool CheckRpgStatusAvailable(NewRpgStatus status);
+    /**
+     * F4 P2: returns true if the bot has any in-progress quest with an
+     * objective in the current zone, OR any accessible/eligible quest
+     * giver in the current zone. Used by DO_QUEST persistence to keep
+     * a bot in DO_QUEST until the area is drained.
+     */
+    bool LocalQuestsRemaining();
 
 protected:
     /* FOR MOVE FAR */

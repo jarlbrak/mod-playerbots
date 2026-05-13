@@ -1240,3 +1240,64 @@ bool NewRpgBaseAction::CheckRpgStatusAvailable(NewRpgStatus status)
     }
     return false;
 }
+
+bool NewRpgBaseAction::LocalQuestsRemaining()
+{
+    uint32 currentZone = bot->GetZoneId();
+    if (!currentZone)
+        return false;
+
+    // 1. Any in-progress quest with an objective POI in this zone, OR any quest
+    //    that's QUEST_STATUS_COMPLETE (objectives done, not turned in yet — keep
+    //    the bot in DO_QUEST so they walk back to the giver).
+    for (auto const& kv : bot->getQuestStatusMap())
+    {
+        uint32 questId = kv.first;
+        QuestStatusData const& q_status = kv.second;
+        if (q_status.Status != QUEST_STATUS_INCOMPLETE && q_status.Status != QUEST_STATUS_COMPLETE)
+            continue;
+
+        if (q_status.Status == QUEST_STATUS_COMPLETE)
+            return true;
+
+        // For in-progress quests, check if any POI is in this zone.
+        std::vector<POIInfo> poiInfo;
+        if (GetQuestPOIPosAndObjectiveIdx(questId, poiInfo))
+        {
+            for (POIInfo const& poi : poiInfo)
+            {
+                float dz = std::max(bot->GetMap()->GetHeight(poi.pos.x, poi.pos.y, MAX_HEIGHT),
+                                    bot->GetMap()->GetWaterLevel(poi.pos.x, poi.pos.y));
+                if (dz == INVALID_HEIGHT || dz == VMAP_INVALID_HEIGHT_VALUE)
+                    continue;
+                uint32 poiZone = bot->GetMap()->GetZoneId(bot->GetPhaseMask(), poi.pos.x, poi.pos.y, dz);
+                if (poiZone == currentZone)
+                    return true;
+            }
+        }
+    }
+
+    // 2. Any quest giver in this zone with quests the bot is eligible for.
+    //    Use the existing "find creatures" AI value lookup, scoped to "npc questgiver"
+    //    in the current zone. Then verify CreatureQuestRelationBounds yields at least
+    //    one eligible quest.
+    GuidVector questGivers = AI_VALUE2(GuidVector, "find creatures",
+                                       std::string("npc questgiver,") + std::to_string(currentZone));
+    for (ObjectGuid const& guid : questGivers)
+    {
+        Creature* npc = botAI->GetCreature(guid);
+        if (!npc)
+            continue;
+        if (npc->GetZoneId() != currentZone)
+            continue;
+        QuestRelationBounds rels = sObjectMgr->GetCreatureQuestRelationBounds(npc->GetEntry());
+        for (QuestRelations::const_iterator it = rels.first; it != rels.second; ++it)
+        {
+            Quest const* q = sObjectMgr->GetQuestTemplate(it->second);
+            if (q && bot->CanTakeQuest(q, false))
+                return true;
+        }
+    }
+
+    return false;
+}
