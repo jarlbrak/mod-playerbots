@@ -1,0 +1,18 @@
+[Unit]
+Description=memory-sidecar (FastAPI) for mod-playerbots LLM agent
+Wants=network-online.target llama-embed.service
+After=network-online.target llama-embed.service
+
+[Container]
+Image=localhost/memory-sidecar:current
+PublishPort=0.0.0.0:8090:8090
+Volume=/opt/containers/memory:/var/memory:Z
+EnvironmentFile=/etc/memory-sidecar.env
+
+[Service]
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=60
+
+[Install]
+WantedBy=default.target
