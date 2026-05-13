@@ -9,8 +9,9 @@ ConditionPathExists=/sys/class/hwmon/hwmon2/pwm1_enable
 Type=oneshot
 RemainAfterExit=yes
 # pwm1_enable=1 → manual control; =2 is auto (firmware curve); =0 is off.
-# pwm1=255 is full speed (max=255).
-ExecStart=/bin/sh -c 'echo 1 > /sys/class/hwmon/hwmon2/pwm1_enable; echo 255 > /sys/class/hwmon/hwmon2/pwm1'
+# pwm1=204 is 80% of max (target: lower acoustics with no LLM load).
+# Raise back to 255 if running a sustained inference workload.
+ExecStart=/bin/sh -c 'echo 1 > /sys/class/hwmon/hwmon2/pwm1_enable; echo 204 > /sys/class/hwmon/hwmon2/pwm1'
 # On stop: return to firmware auto curve.
 ExecStop=/bin/sh -c 'echo 2 > /sys/class/hwmon/hwmon2/pwm1_enable'
 
