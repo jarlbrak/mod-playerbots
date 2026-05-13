@@ -106,3 +106,29 @@ TEST_CASE("LlmAgentConfig ApplyMode falls back to Log on unknown value") {
     src.values["AiPlayerbot.LlmAgent.ApplyMode"] = "garbage";
     CHECK(LoadLlmAgentConfig(src).ApplyMode == LlmApplyMode::Log);
 }
+
+TEST_CASE("LlmAgentConfig MemorySidecar defaults") {
+    StubConfigSource src;
+    LlmAgentConfig cfg = LoadLlmAgentConfig(src);
+    CHECK(cfg.MemorySidecar_Endpoint == "http://127.0.0.1:8090");
+    CHECK(cfg.MemorySidecar_RequestTimeoutMs == 2000u);
+    CHECK(cfg.MemorySidecar_EnableWrites == true);
+    CHECK(cfg.MemorySidecar_RecallTopK == 3u);
+    CHECK(cfg.MemorySidecar_HintMaxChars == 1200u);
+}
+
+TEST_CASE("LlmAgentConfig MemorySidecar overrides applied") {
+    StubConfigSource src;
+    src.values["AiPlayerbot.MemorySidecar.Endpoint"]         = "http://10.0.0.5:9999";
+    src.values["AiPlayerbot.MemorySidecar.RequestTimeoutMs"] = "1500";
+    src.values["AiPlayerbot.MemorySidecar.EnableWrites"]     = "0";
+    src.values["AiPlayerbot.MemorySidecar.RecallTopK"]       = "5";
+    src.values["AiPlayerbot.MemorySidecar.HintMaxChars"]     = "800";
+
+    LlmAgentConfig cfg = LoadLlmAgentConfig(src);
+    CHECK(cfg.MemorySidecar_Endpoint == "http://10.0.0.5:9999");
+    CHECK(cfg.MemorySidecar_RequestTimeoutMs == 1500u);
+    CHECK(cfg.MemorySidecar_EnableWrites == false);
+    CHECK(cfg.MemorySidecar_RecallTopK == 5u);
+    CHECK(cfg.MemorySidecar_HintMaxChars == 800u);
+}

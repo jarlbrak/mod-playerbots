@@ -22,6 +22,13 @@ struct LlmAgentConfig {
     uint32_t     MaxCooldownMinutes = 60;
     uint32_t     FallbackCooldownMs = 300000;
     uint32_t     EventLogSize       = 20;
+
+    // Phase 3 — memory sidecar
+    std::string MemorySidecar_Endpoint         = "http://127.0.0.1:8090";
+    uint32_t    MemorySidecar_RequestTimeoutMs = 2000;
+    bool        MemorySidecar_EnableWrites     = true;
+    uint32_t    MemorySidecar_RecallTopK       = 3;
+    uint32_t    MemorySidecar_HintMaxChars     = 1200;
 };
 
 extern const char* const kDefaultSystemPrompt;
@@ -46,6 +53,12 @@ LlmAgentConfig LoadLlmAgentConfig(const Source& src) {
     cfg.MaxCooldownMinutes = src.template Get<uint32_t>("AiPlayerbot.LlmAgent.MaxCooldownMinutes", uint32_t{60});
     cfg.FallbackCooldownMs = src.template Get<uint32_t>("AiPlayerbot.LlmAgent.FallbackCooldownMs", uint32_t{300000});
     cfg.EventLogSize       = src.template Get<uint32_t>("AiPlayerbot.LlmAgent.EventLogSize",       uint32_t{20});
+
+    cfg.MemorySidecar_Endpoint         = src.template Get<std::string>("AiPlayerbot.MemorySidecar.Endpoint",         std::string{"http://127.0.0.1:8090"});
+    cfg.MemorySidecar_RequestTimeoutMs = src.template Get<uint32_t>   ("AiPlayerbot.MemorySidecar.RequestTimeoutMs", uint32_t{2000});
+    cfg.MemorySidecar_EnableWrites     = src.template Get<bool>       ("AiPlayerbot.MemorySidecar.EnableWrites",     true);
+    cfg.MemorySidecar_RecallTopK       = src.template Get<uint32_t>   ("AiPlayerbot.MemorySidecar.RecallTopK",       uint32_t{3});
+    cfg.MemorySidecar_HintMaxChars     = src.template Get<uint32_t>   ("AiPlayerbot.MemorySidecar.HintMaxChars",     uint32_t{1200});
     return cfg;
 }
 
