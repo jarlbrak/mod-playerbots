@@ -4,6 +4,7 @@
 #include "LlmAgentManager.h"
 #include "Player.h"
 #include "PlayerbotMgr.h"
+#include "DBCStores.h"
 #endif
 
 #include <sstream>
@@ -14,6 +15,15 @@ constexpr size_t kMaxWhisperChars = 80;
 std::string truncate_whisper(const std::string& s) {
     return s.size() <= kMaxWhisperChars ? s : s.substr(0, kMaxWhisperChars) + "...";
 }
+
+#ifndef LLMAGENT_UNIT_TESTS
+std::string get_bot_zone_name(Player* bot) {
+    if (!bot) return {};
+    AreaTableEntry const* area = sAreaTableStore.LookupEntry(bot->GetZoneId());
+    if (!area || !area->area_name[0]) return {};
+    return std::string(area->area_name[0]);
+}
+#endif
 }  // namespace
 
 namespace LlmAgentHooks {
@@ -39,11 +49,16 @@ void OnWhisperReceived(Player* bot, Player* sender, const std::string& text) {
     if (mgr.Config().MemorySidecar_EnableWrites) {
         std::vector<std::string> entities;
         entities.push_back(sender->GetName());
+        std::string zone = get_bot_zone_name(bot);
+        if (!zone.empty()) entities.push_back(zone);
         std::ostringstream txt;
-        txt << "received whisper from " << sender->GetName()
-            << ": " << truncate_whisper(text);
+        txt << "received whisper from " << sender->GetName();
+        if (!zone.empty()) txt << " in " << zone;
+        txt << ": " << truncate_whisper(text);
+        std::vector<std::tuple<std::string, std::string, std::string>> relations;
+        if (!zone.empty()) relations.emplace_back(sender->GetName(), "encountered_in", zone);
         mgr.MemoryClient().Remember(
-            bot_guid, txt.str(), entities, /*salience*/ 0.7);
+            bot_guid, txt.str(), entities, /*salience*/ 0.7, relations);
     }
 #endif
     (void)bot; (void)sender; (void)text;  // silence unused-param in unit-test build
@@ -60,8 +75,14 @@ void OnKill(Player* bot, const std::string& victim_name) {
     if (mgr.Config().MemorySidecar_EnableWrites) {
         std::vector<std::string> entities;
         entities.push_back(victim_name);
+        std::string zone = get_bot_zone_name(bot);
+        if (!zone.empty()) entities.push_back(zone);
+        std::string text = "killed " + victim_name;
+        if (!zone.empty()) text += " in " + zone;
+        std::vector<std::tuple<std::string, std::string, std::string>> relations;
+        if (!zone.empty()) relations.emplace_back(victim_name, "located_in", zone);
         mgr.MemoryClient().Remember(
-            bot_guid, "killed " + victim_name, entities, /*salience*/ 0.1);
+            bot_guid, text, entities, /*salience*/ 0.1, relations);
     }
 #endif
     (void)bot; (void)victim_name;
