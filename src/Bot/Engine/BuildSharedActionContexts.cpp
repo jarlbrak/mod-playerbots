@@ -20,6 +20,7 @@
 #include "Ai/Raid/Icecrown/RaidIccActionContext.h"
 #include "Ai/Dungeon/TbcDungeonActionContext.h"
 #include "Ai/Dungeon/WotlkDungeonActionContext.h"
+#include "Ai/Dungeon/RagefireChasm/RagefireChasmActionContext.h"
 
 void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Action>& actionContexts)
 {
@@ -58,4 +59,5 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new WotlkDungeonFoSActionContext());
     actionContexts.Add(new WotlkDungeonPoSActionContext());
     actionContexts.Add(new WotlkDungeonToCActionContext());
+    actionContexts.Add(new ClassicDungeonRFCActionContext());
 }

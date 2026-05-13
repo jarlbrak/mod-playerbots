@@ -18,6 +18,7 @@
 #include "ForgeOfSouls/Strategy/ForgeOfSoulsStrategy.h"
 #include "PitOfSaron/Strategy/PitOfSaronStrategy.h"
 #include "TrialOfTheChampion/Strategy/TrialOfTheChampionStrategy.h"
+#include "RagefireChasm/Strategy/RagefireChasmStrategy.h"
 
 /*
 Full list/TODO:
@@ -64,6 +65,9 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
             creators["wotlk-hor"] = &DungeonStrategyContext::wotlk_hor;     // Halls of Reflection
             creators["wotlk-pos"] = &DungeonStrategyContext::wotlk_pos;     // Pit of Saron
             creators["wotlk-fos"] = &DungeonStrategyContext::wotlk_fos;     // The Forge of Souls
+
+            // Classic (F3 Phase 2)
+            creators["classic-rfc"] = &DungeonStrategyContext::classic_rfc; // Ragefire Chasm
         }
     private:
         static Strategy* tbc_ac(PlayerbotAI* botAI) { return new TbcDungeonAuchenaiCryptsStrategy(botAI); }
@@ -82,6 +86,7 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
         static Strategy* wotlk_fos(PlayerbotAI* botAI) { return new WotlkDungeonFoSStrategy(botAI); }
         static Strategy* wotlk_pos(PlayerbotAI* botAI) { return new WotlkDungeonPoSStrategy(botAI); }
         static Strategy* wotlk_toc(PlayerbotAI* botAI) { return new WotlkDungeonToCStrategy(botAI); }
+        static Strategy* classic_rfc(PlayerbotAI* botAI) { return new ClassicDungeonRFCStrategy(botAI); }
         // NYI from here down
         static Strategy* wotlk_hor(PlayerbotAI* botAI) { return new WotlkDungeonUKStrategy(botAI); }
 };

@@ -1586,7 +1586,8 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
 {
     static const std::vector<std::string> allInstanceStrategies =
     {
-        "aq20", "bwl", "karazhan", "gruulslair", "icc", "magtheridon", "moltencore",
+        "aq20", "bwl", "classic-rfc",
+        "gruulslair", "icc", "karazhan", "magtheridon", "moltencore",
         "naxx", "onyxia", "ssc", "tbc-ac", "tempestkeep", "ulduar", "voa", "wotlk-an", "wotlk-cos",
         "wotlk-dtk", "wotlk-eoe", "wotlk-fos", "wotlk-gd", "wotlk-hol", "wotlk-hor",
         "wotlk-hos", "wotlk-nex", "wotlk-occ", "wotlk-ok", "wotlk-os", "wotlk-pos",
@@ -1700,6 +1701,10 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
             break;
         case 668:
             strategyName = "wotlk-hor";  // Halls of Reflection
+            break;
+        case 389:
+            if (sPlayerbotAIConfig.dungeonRagefireChasmStrategyEnabled)
+                strategyName = "classic-rfc";
             break;
         default:
             break;
