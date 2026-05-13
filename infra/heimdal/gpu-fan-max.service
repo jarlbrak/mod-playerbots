@@ -1,0 +1,18 @@
+[Unit]
+Description=Force AMD GPU fan (hwmon2) to PWM max
+# Run after amdgpu module is loaded and hwmon is populated.
+After=systemd-modules-load.service
+ConditionPathExists=/sys/class/hwmon/hwmon2/pwm1
+ConditionPathExists=/sys/class/hwmon/hwmon2/pwm1_enable
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# pwm1_enable=1 → manual control; =2 is auto (firmware curve); =0 is off.
+# pwm1=255 is full speed (max=255).
+ExecStart=/bin/sh -c 'echo 1 > /sys/class/hwmon/hwmon2/pwm1_enable; echo 255 > /sys/class/hwmon/hwmon2/pwm1'
+# On stop: return to firmware auto curve.
+ExecStop=/bin/sh -c 'echo 2 > /sys/class/hwmon/hwmon2/pwm1_enable'
+
+[Install]
+WantedBy=multi-user.target
