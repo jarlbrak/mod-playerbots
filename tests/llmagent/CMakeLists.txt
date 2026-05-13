@@ -17,6 +17,8 @@ find_package(Threads REQUIRED)
 
 add_executable(llmagent_unit_tests
   doctest_main.cpp
+  test_config_load.cpp
+  ${LLMAGENT_DIR}/LlmAgentConfig.cpp
 )
 
 target_include_directories(llmagent_unit_tests PRIVATE
