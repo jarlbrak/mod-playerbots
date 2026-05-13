@@ -1092,10 +1092,31 @@ bool NewRpgBaseAction::RandomChangeStatus(std::vector<NewRpgStatus> candidateSta
         }
         case RPG_GO_GRIND:
         {
-            WorldPosition pos = SelectRandomGrindPos(bot);
+            // F4 P3: target-material farming first; fall back to legacy random
+            // grind if no source spawn nearby.
+            uint32 targetItem = SelectFarmTargetItem();
+            WorldPosition pos;
+            std::vector<uint32> cEntries, gEntries;
+            if (targetItem)
+            {
+                GetFarmSourcesForItem(targetItem, cEntries, gEntries);
+                pos = SelectFarmSpawnPos(cEntries, gEntries);
+            }
+            if (pos == WorldPosition())
+                pos = SelectRandomGrindPos(bot);
+
             if (pos != WorldPosition())
             {
                 botAI->rpgInfo.ChangeToGoGrind(pos);
+                // Persist target item + source lists on the GoGrind data for
+                // visibility / future use.
+                auto* gdata = std::get_if<NewRpgInfo::GoGrind>(&botAI->rpgInfo.data);
+                if (gdata)
+                {
+                    gdata->targetItemId = targetItem;
+                    gdata->sourceCreatureEntries = cEntries;
+                    gdata->sourceGameobjectEntries = gEntries;
+                }
                 return true;
             }
             return false;
