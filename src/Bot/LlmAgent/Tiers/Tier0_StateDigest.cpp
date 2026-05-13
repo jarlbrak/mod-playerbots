@@ -86,6 +86,7 @@ nlohmann::json BuildDigestJson(const LlmBotState& s) {
 #include "LlmAgentManager.h"
 #include "PlayerbotMgr.h"
 #include "ObjectAccessor.h"
+#include "AiObjectContext.h"
 #include <algorithm>
 #include <utility>
 
