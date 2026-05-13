@@ -19,8 +19,10 @@ add_executable(llmagent_unit_tests
   doctest_main.cpp
   test_config_load.cpp
   test_goal_parser.cpp
+  test_http_client.cpp
   ${LLMAGENT_DIR}/LlmAgentConfig.cpp
   ${LLMAGENT_DIR}/Schemas/Goal.cpp
+  ${LLMAGENT_DIR}/Client/LlmHttpClient.cpp
 )
 
 target_include_directories(llmagent_unit_tests PRIVATE
