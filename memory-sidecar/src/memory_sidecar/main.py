@@ -62,6 +62,17 @@ class RecallResponse(BaseModel):
     memories: list[RecalledMemory]
 
 
+class RecallAboutRequest(BaseModel):
+    bot_id: str
+    entity: str
+    max_hops: int = 2
+    top_k: int = 3
+
+
+class RecallAboutResponse(BaseModel):
+    hints: list[str]
+
+
 # ---- App factory ----
 
 def create_app(embedder: Optional[Any] = None) -> FastAPI:
@@ -265,3 +276,74 @@ def _register_routes(app: FastAPI, state: dict[str, Any]) -> None:
                 for s, mid, text, ts in top
             ]
         )
+
+    @app.post("/memory/recall_about", response_model=RecallAboutResponse)
+    async def recall_about(req: RecallAboutRequest):
+        conn = state["conn"]
+        embedder = state["embedder"]
+        entity_lower = req.entity.lower()
+
+        # Resolve seed entity.
+        cur = conn.execute(
+            "SELECT id FROM entities WHERE bot_id=? AND name_lower=?",
+            (req.bot_id, entity_lower),
+        )
+        row = cur.fetchone()
+        if not row:
+            return RecallAboutResponse(hints=[])
+        seed_id = row[0]
+
+        # BFS traversal up to max_hops. Edges are bidirectional.
+        visited = {seed_id}
+        frontier = {seed_id}
+        for _ in range(max(0, req.max_hops)):
+            if not frontier:
+                break
+            placeholders = ",".join("?" * len(frontier))
+            cur = conn.execute(
+                f"SELECT src_entity_id, dst_entity_id FROM edges "
+                f"WHERE src_entity_id IN ({placeholders}) "
+                f"   OR dst_entity_id IN ({placeholders})",
+                tuple(frontier) + tuple(frontier),
+            )
+            next_frontier = set()
+            for s, d in cur.fetchall():
+                for n in (s, d):
+                    if n not in visited:
+                        next_frontier.add(n)
+                        visited.add(n)
+            frontier = next_frontier
+
+        # Pull memories attached to any visited entity.
+        placeholders = ",".join("?" * len(visited))
+        cur = conn.execute(
+            f"SELECT DISTINCT m.id, m.text, m.salience, m.created_ts, "
+            f"       m.last_recalled_ts, m.embedding "
+            f"FROM memories m "
+            f"JOIN memory_entities me ON me.memory_id = m.id "
+            f"WHERE m.bot_id = ? AND me.entity_id IN ({placeholders})",
+            (req.bot_id,) + tuple(visited),
+        )
+        rows = cur.fetchall()
+        if not rows:
+            return RecallAboutResponse(hints=[])
+
+        q_emb = await embedder.embed(f"recent events near {req.entity}")
+        now = int(time.time())
+        scored = []
+        for r in rows:
+            mid, text, sal, ct, lr, emb_blob = r
+            emb = np.frombuffer(emb_blob, dtype=np.float32) if emb_blob else None
+            m = Memory(
+                id=mid, bot_id=req.bot_id, text=text, salience=sal,
+                created_ts=ct, last_recalled_ts=lr, embedding=emb,
+            )
+            scored.append((score_memory(m, q_emb, now, state["weights"]), mid, text))
+        scored.sort(reverse=True, key=lambda t: t[0])
+        top = scored[: req.top_k]
+        for _, mid, _ in top:
+            conn.execute(
+                "UPDATE memories SET last_recalled_ts=? WHERE id=?", (now, mid)
+            )
+        conn.commit()
+        return RecallAboutResponse(hints=[text for _, _, text in top])
