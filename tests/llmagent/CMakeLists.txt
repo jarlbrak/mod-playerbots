@@ -24,6 +24,7 @@ add_executable(llmagent_unit_tests
   test_manager_threading.cpp
   test_selector.cpp
   test_cooldown.cpp
+  test_counters.cpp
   ${LLMAGENT_DIR}/LlmAgentConfig.cpp
   ${LLMAGENT_DIR}/Schemas/Goal.cpp
   ${LLMAGENT_DIR}/Client/LlmHttpClient.cpp
@@ -31,6 +32,7 @@ add_executable(llmagent_unit_tests
   ${LLMAGENT_DIR}/LlmAgentManager.cpp
   ${LLMAGENT_DIR}/Selector/BotSelector.cpp
   ${LLMAGENT_DIR}/Cooldown/BotCooldownMap.cpp
+  ${LLMAGENT_DIR}/Telemetry/LlmCounters.cpp
 )
 
 target_include_directories(llmagent_unit_tests PRIVATE

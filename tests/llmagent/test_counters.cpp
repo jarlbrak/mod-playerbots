@@ -1,0 +1,75 @@
+#include "doctest.h"
+#include "Telemetry/LlmCounters.h"
+#include <atomic>
+#include <thread>
+#include <vector>
+
+TEST_CASE("LlmCounters starts at zero") {
+    LlmCounters c;
+    auto s = c.Snapshot();
+    CHECK(s.enqueued_total == 0);
+    CHECK(s.parsed_ok == 0);
+    CHECK(s.applied == 0);
+}
+
+TEST_CASE("LlmCounters IncEnqueued increments") {
+    LlmCounters c;
+    for (int i = 0; i < 7; ++i) c.IncEnqueued();
+    CHECK(c.Snapshot().enqueued_total == 7);
+}
+
+TEST_CASE("LlmCounters parsed-status routes to correct bucket") {
+    LlmCounters c;
+    c.IncStatus("ok");
+    c.IncStatus("ok");
+    c.IncStatus("schema_error");
+    c.IncStatus("timeout");
+    c.IncStatus("garbage_unknown");  // unknown is silently dropped
+    auto s = c.Snapshot();
+    CHECK(s.parsed_ok == 2);
+    CHECK(s.parsed_schema_error == 1);
+    CHECK(s.parsed_timeout == 1);
+}
+
+TEST_CASE("LlmCounters atomic under contention") {
+    LlmCounters c;
+    constexpr int N = 8;
+    constexpr int PER = 1000;
+    std::vector<std::thread> threads;
+    for (int t = 0; t < N; ++t) {
+        threads.emplace_back([&]{
+            for (int i = 0; i < PER; ++i) {
+                c.IncEnqueued();
+                c.IncApplied();
+            }
+        });
+    }
+    for (auto& th : threads) th.join();
+    auto s = c.Snapshot();
+    CHECK(s.enqueued_total == N * PER);
+    CHECK(s.applied == N * PER);
+}
+
+TEST_CASE("LlmCounters outcome counters cover all four buckets") {
+    LlmCounters c;
+    c.IncApplied();
+    c.IncShadowAccepted();
+    c.IncLogAcceptedSkipped();
+    c.IncFallbackUsed();
+    c.IncFallbackUsed();
+    auto s = c.Snapshot();
+    CHECK(s.applied == 1);
+    CHECK(s.shadow_accepted == 1);
+    CHECK(s.log_accepted_skipped == 1);
+    CHECK(s.fallback_used == 2);
+}
+
+TEST_CASE("LlmCounters rejected_by_reason accumulates per reason") {
+    LlmCounters c;
+    c.IncValidatorRejected("rejected_quest_not_in_log");
+    c.IncValidatorRejected("rejected_quest_not_in_log");
+    c.IncValidatorRejected("rejected_map_mismatch");
+    auto s = c.Snapshot();
+    CHECK(s.rejected_by_reason["rejected_quest_not_in_log"] == 2);
+    CHECK(s.rejected_by_reason["rejected_map_mismatch"] == 1);
+}
