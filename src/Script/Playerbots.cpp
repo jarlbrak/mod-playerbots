@@ -33,6 +33,7 @@
 #include "PlayerbotCommandScript.h"
 #include "cmath"
 #include "BattleGroundTactics.h"
+#include "Bot/LlmAgent/LlmAgentManager.h"
 
 class PlayerbotsDatabaseScript : public DatabaseScript
 {
@@ -380,6 +381,11 @@ public:
     {
         PlayerbotWorldThreadProcessor::instance().Update(diff);
         sRandomPlayerbotMgr.UpdateAI(diff);  // World thread only
+    }
+
+    void OnShutdown() override
+    {
+        LlmAgentManager::Instance().Shutdown();
     }
 };
 
