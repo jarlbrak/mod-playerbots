@@ -45,6 +45,23 @@ class ForgetResponse(BaseModel):
     forgotten: bool
 
 
+class RecallRequest(BaseModel):
+    bot_id: str
+    query: str
+    top_k: int = 5
+
+
+class RecalledMemory(BaseModel):
+    memory_id: str
+    text: str
+    score: float
+    ts: int
+
+
+class RecallResponse(BaseModel):
+    memories: list[RecalledMemory]
+
+
 # ---- App factory ----
 
 def create_app(embedder: Optional[Any] = None) -> FastAPI:
@@ -205,3 +222,46 @@ def _register_routes(app: FastAPI, state: dict[str, Any]) -> None:
             )
             conn.commit()
         return ForgetResponse(forgotten=deleted)
+
+    @app.post("/memory/recall", response_model=RecallResponse)
+    async def recall(req: RecallRequest):
+        conn = state["conn"]
+        embedder = state["embedder"]
+        cur = conn.execute(
+            "SELECT id, text, salience, created_ts, last_recalled_ts, embedding "
+            "FROM memories WHERE bot_id=?",
+            (req.bot_id,),
+        )
+        rows = cur.fetchall()
+        if not rows:
+            return RecallResponse(memories=[])
+
+        q_emb = await embedder.embed(req.query)
+        now = int(time.time())
+
+        scored: list[tuple[float, str, str, int]] = []
+        for row in rows:
+            mid, text, salience, created_ts, last_recalled_ts, emb_blob = row
+            emb = np.frombuffer(emb_blob, dtype=np.float32) if emb_blob else None
+            m = Memory(
+                id=mid, bot_id=req.bot_id, text=text, salience=salience,
+                created_ts=created_ts, last_recalled_ts=last_recalled_ts,
+                embedding=emb,
+            )
+            s = score_memory(m, q_emb, now, state["weights"])
+            scored.append((s, mid, text, created_ts))
+
+        scored.sort(reverse=True, key=lambda t: t[0])
+        top = scored[: req.top_k]
+        for s, mid, _, _ in top:
+            conn.execute(
+                "UPDATE memories SET last_recalled_ts=? WHERE id=?", (now, mid)
+            )
+        conn.commit()
+
+        return RecallResponse(
+            memories=[
+                RecalledMemory(memory_id=mid, text=text, score=float(s), ts=ts)
+                for s, mid, text, ts in top
+            ]
+        )
