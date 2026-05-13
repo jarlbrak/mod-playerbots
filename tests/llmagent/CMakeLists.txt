@@ -25,6 +25,7 @@ add_executable(llmagent_unit_tests
   test_selector.cpp
   test_cooldown.cpp
   test_counters.cpp
+  test_validator.cpp
   ${LLMAGENT_DIR}/LlmAgentConfig.cpp
   ${LLMAGENT_DIR}/Schemas/Goal.cpp
   ${LLMAGENT_DIR}/Client/LlmHttpClient.cpp
@@ -33,6 +34,8 @@ add_executable(llmagent_unit_tests
   ${LLMAGENT_DIR}/Selector/BotSelector.cpp
   ${LLMAGENT_DIR}/Cooldown/BotCooldownMap.cpp
   ${LLMAGENT_DIR}/Telemetry/LlmCounters.cpp
+  ${LLMAGENT_DIR}/Validator/GoalValidator.cpp
+  ${LLMAGENT_DIR}/Validator/ValidationContext.cpp
 )
 
 target_include_directories(llmagent_unit_tests PRIVATE
