@@ -225,6 +225,12 @@ bool PlayerbotAIConfig::Initialize()
     randomBotJoinLfg = sConfigMgr->GetOption<bool>("AiPlayerbot.RandomBotJoinLfg", true);
     lfgDungeonsAutoPopulate = sConfigMgr->GetOption<bool>("AiPlayerbot.LfgDungeonsAutoPopulate", true);
     lfgAllowBotOnlyGroups = sConfigMgr->GetOption<bool>("AiPlayerbot.LfgAllowBotOnlyGroups", false);
+    dungeonRagefireChasmStrategyEnabled    = sConfigMgr->GetOption<bool>("AiPlayerbot.DungeonRagefireChasmStrategyEnabled", true);
+    dungeonStockadeStrategyEnabled         = sConfigMgr->GetOption<bool>("AiPlayerbot.DungeonStockadeStrategyEnabled", true);
+    dungeonWailingCavernsStrategyEnabled   = sConfigMgr->GetOption<bool>("AiPlayerbot.DungeonWailingCavernsStrategyEnabled", true);
+    dungeonDeadminesStrategyEnabled        = sConfigMgr->GetOption<bool>("AiPlayerbot.DungeonDeadminesStrategyEnabled", true);
+    dungeonShadowfangKeepStrategyEnabled   = sConfigMgr->GetOption<bool>("AiPlayerbot.DungeonShadowfangKeepStrategyEnabled", true);
+    dungeonBlackfathomDeepsStrategyEnabled = sConfigMgr->GetOption<bool>("AiPlayerbot.DungeonBlackfathomDeepsStrategyEnabled", true);
 
     restrictHealerDPS = sConfigMgr->GetOption<bool>("AiPlayerbot.HealerDPSMapRestriction", false);
     LoadList<std::vector<uint32>>(

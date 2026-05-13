@@ -147,6 +147,12 @@ public:
     bool randomBotJoinLfg;
     bool lfgDungeonsAutoPopulate;
     bool lfgAllowBotOnlyGroups;
+    bool dungeonRagefireChasmStrategyEnabled;
+    bool dungeonStockadeStrategyEnabled;
+    bool dungeonWailingCavernsStrategyEnabled;
+    bool dungeonDeadminesStrategyEnabled;
+    bool dungeonShadowfangKeepStrategyEnabled;
+    bool dungeonBlackfathomDeepsStrategyEnabled;
 
     // Buff system
     // Min group size to use Greater buffs (Paladin, Mage, Druid). Default: 3

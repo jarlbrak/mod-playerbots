@@ -730,6 +730,20 @@ AiPlayerbot.LfgDungeonsAutoPopulate = 1
 #
 AiPlayerbot.LfgAllowBotOnlyGroups = 0
 
+#
+# Per-dungeon bot AI strategies for bracket-1 classic dungeons (F3 Phase 2).
+# Each flag enables the boss-mechanic triggers and target-prioritization
+# multipliers for one dungeon. Disable to fall back to generic combat AI
+# (still capable of clearing, but slower / wipe-prone on scripted bosses).
+# Default: all 1 (enabled).
+#
+AiPlayerbot.DungeonRagefireChasmStrategyEnabled = 1
+AiPlayerbot.DungeonStockadeStrategyEnabled = 1
+AiPlayerbot.DungeonWailingCavernsStrategyEnabled = 1
+AiPlayerbot.DungeonDeadminesStrategyEnabled = 1
+AiPlayerbot.DungeonShadowfangKeepStrategyEnabled = 1
+AiPlayerbot.DungeonBlackfathomDeepsStrategyEnabled = 1
+
 # Enable/Disable periodic online - offline of randombots to mimic the real-world scenario where not all players are online simultaneously
 # When enabled, randombots are randomly selected to go online or offline periodically from a larger set
 # Default: 0 (disabled, the set of online bots remains fixed)
