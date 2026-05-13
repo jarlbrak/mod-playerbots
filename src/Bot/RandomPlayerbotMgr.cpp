@@ -1289,12 +1289,6 @@ void RandomPlayerbotMgr::CheckLfgQueue()
         // ourselves from the DBC. Per-bot level + role filters still apply
         // inside LfgJoinAction::JoinLFG() so individual bots only queue for
         // dungeons appropriate to their level.
-        fprintf(stderr,
-            "[f3.5-diag] auto-populate ENTER: store rows=%u, alliance before=%zu, horde before=%zu\n",
-            sLFGDungeonStore.GetNumRows(),
-            LfgDungeons[TEAM_ALLIANCE].size(),
-            LfgDungeons[TEAM_HORDE].size());
-        fflush(stderr);
         for (uint32 i = 0; i < sLFGDungeonStore.GetNumRows(); ++i)
         {
             LFGDungeonEntry const* dungeon = sLFGDungeonStore.LookupEntry(i);
@@ -1308,69 +1302,6 @@ void RandomPlayerbotMgr::CheckLfgQueue()
             // dungeon->Faction inside LFGMgr's eligibility checks downstream.
             LfgDungeons[TEAM_ALLIANCE].push_back(dungeon->ID);
             LfgDungeons[TEAM_HORDE].push_back(dungeon->ID);
-        }
-        fprintf(stderr,
-            "[f3.5-diag] auto-populate EXIT: alliance=%zu, horde=%zu\n",
-            LfgDungeons[TEAM_ALLIANCE].size(),
-            LfgDungeons[TEAM_HORDE].size());
-        fflush(stderr);
-    }
-
-    // F3.5 verification: force-queue a few eligible bots so we can verify the
-    // queue path end-to-end without depending on non-combat trigger firing.
-    // The LLM-agent layer will eventually drive queueing per-bot; this proves
-    // the infrastructure works.
-    {
-        int forced = 0;
-        for (uint32 guidLow : currentBots)
-        {
-            if (forced >= 3) break;
-            Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid::Create<HighGuid::Player>(guidLow));
-            if (!bot || !bot->IsInWorld())
-                continue;
-            if (bot->GetLevel() < 15)  // need at least level 15 to fit WC range
-                continue;
-            if (sLFGMgr->GetState(bot->GetGUID()) != lfg::LFG_STATE_NONE)
-                continue;
-            if (bot->GetGroup())  // skip grouped bots; LFG path is for solo
-                continue;
-            if (bot->InBattleground() || bot->GetMap()->IsDungeon())
-                continue;
-
-            // Build a specific-dungeon list (no RANDOM — would be rejected as mixed)
-            lfg::LfgDungeonSet list;
-            for (uint32 id : LfgDungeons[bot->GetTeamId()])
-            {
-                LFGDungeonEntry const* d = sLFGDungeonStore.LookupEntry(id);
-                if (!d || d->TypeID != lfg::LFG_TYPE_DUNGEON)
-                    continue;
-                if (d->MinLevel && (bot->GetLevel() < d->MinLevel || bot->GetLevel() > d->MaxLevel))
-                    continue;
-                if (bot->GetLevel() > d->MinLevel + 10)
-                    continue;
-                list.insert(d->ID);
-                if (list.size() >= 5)
-                    break;
-            }
-            if (list.empty())
-                continue;
-
-            WorldPacket* data = new WorldPacket(CMSG_LFG_JOIN);
-            *data << (uint32)lfg::PLAYER_ROLE_DAMAGE;
-            *data << (bool)false;
-            *data << (bool)false;
-            *data << (uint8)list.size();
-            for (uint32 d : list)
-                *data << (uint32)d;
-            *data << (uint8)3 << (uint8)0 << (uint8)0 << (uint8)0;
-            *data << std::string("");
-            bot->GetSession()->QueuePacket(data);
-
-            fprintf(stderr,
-                "[f3.5-diag] FORCE-QUEUED bot %s lvl%u with %zu dungeon(s)\n",
-                bot->GetName().c_str(), bot->GetLevel(), list.size());
-            fflush(stderr);
-            ++forced;
         }
     }
 

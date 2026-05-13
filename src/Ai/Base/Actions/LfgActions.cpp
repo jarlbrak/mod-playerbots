@@ -85,31 +85,10 @@ uint32 LfgJoinAction::GetRoles()
 
 bool LfgJoinAction::JoinLFG()
 {
-    // [f3.5-diag] global counter so we can confirm JoinLFG fires at all
-    static std::atomic<uint64_t> joinlfg_calls{0};
-    uint64_t my_call = ++joinlfg_calls;
-    if (my_call % 500 == 0)  // every 500th call
-    {
-        fprintf(stderr,
-            "[f3.5-diag] JoinLFG global call #%lu (Bot %s lvl%u)\n",
-            (unsigned long)my_call, bot->GetName().c_str(), bot->GetLevel());
-        fflush(stderr);
-    }
-
     // check if already in lfg
     LfgState state = sLFGMgr->GetState(bot->GetGUID());
     if (state != LFG_STATE_NONE)
-    {
-        static std::atomic<uint64_t> early_state_count{0};
-        if (++early_state_count % 500 == 0)
-        {
-            fprintf(stderr,
-                "[f3.5-diag] state-early-return #%lu (Bot %s, state=%d)\n",
-                (unsigned long)early_state_count.load(), bot->GetName().c_str(), (int)state);
-            fflush(stderr);
-        }
         return false;
-    }
 
     /*ItemCountByQuality visitor;
     IterateItems(&visitor, ITERATE_ITEMS_IN_EQUIP);
@@ -124,13 +103,6 @@ bool LfgJoinAction::JoinLFG()
     std::vector<uint32> selected;
 
     std::vector<uint32> dungeons = RandomPlayerbotMgr::instance().LfgDungeons[bot->GetTeamId()];
-    if (bot->GetGUID().GetCounter() % 100 == 0)
-    {
-        fprintf(stderr,
-            "[f3.5-diag] Bot %s lvl%u JoinLFG: state=NONE, dungeons.size=%zu\n",
-            bot->GetName().c_str(), bot->GetLevel(), dungeons.size());
-        fflush(stderr);
-    }
     if (!dungeons.size())
         return false;
 
@@ -178,43 +150,11 @@ bool LfgJoinAction::JoinLFG()
         list = std::move(filtered_list);
     }
 
-    if (bot->GetGUID().GetCounter() % 100 == 0)
-    {
-        int t_random = 0, t_dungeon = 0, t_heroic = 0, t_raid = 0;
-        for (uint32 id : selected)
-        {
-            if (LFGDungeonEntry const* d = sLFGDungeonStore.LookupEntry(id))
-            {
-                switch (d->TypeID)
-                {
-                    case LFG_TYPE_RANDOM:  ++t_random;  break;
-                    case LFG_TYPE_DUNGEON: ++t_dungeon; break;
-                    case LFG_TYPE_HEROIC:  ++t_heroic;  break;
-                    case LFG_TYPE_RAID:    ++t_raid;    break;
-                    default: break;
-                }
-            }
-        }
-        fprintf(stderr,
-            "[f3.5-diag] Bot %s lvl%u filter: selected=%zu (R=%d, D=%d, H=%d, raid=%d) has_specific=%d\n",
-            bot->GetName().c_str(), bot->GetLevel(),
-            selected.size(), t_random, t_dungeon, t_heroic, t_raid, (int)has_specific);
-        fflush(stderr);
-    }
-
     if (!selected.size())
         return false;
 
     if (list.empty())
         return false;
-
-    if (bot->GetGUID().GetCounter() % 100 == 0)
-    {
-        fprintf(stderr,
-            "[f3.5-diag] Bot %s lvl%u: queuing CMSG_LFG_JOIN with %zu dungeon(s)\n",
-            bot->GetName().c_str(), bot->GetLevel(), list.size());
-        fflush(stderr);
-    }
 
     bool many = list.size() > 1;
     LFGDungeonEntry const* dungeon = sLFGDungeonStore.LookupEntry(*list.begin());
@@ -284,15 +224,6 @@ bool LfgRoleCheckAction::Execute(Event /*event*/)
 bool LfgAcceptAction::Execute(Event event)
 {
     uint32 id = AI_VALUE(uint32, "lfg proposal");
-
-    // Diagnostic: did AC core ever send us a proposal back?
-    if (bot->GetGUID().GetCounter() % 100 == 0 && (id != 0 || !event.getPacket().empty()))
-    {
-        fprintf(stderr,
-            "[f3.5-diag] Bot %s LfgAcceptAction: id=%u, packet.empty=%d\n",
-            bot->GetName().c_str(), id, (int)event.getPacket().empty());
-        fflush(stderr);
-    }
 
     // Try accept if already stored
     if (id)
