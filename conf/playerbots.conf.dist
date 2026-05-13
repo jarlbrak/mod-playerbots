@@ -2463,3 +2463,39 @@ AiPlayerbot.LlmAgent.JsonlPath = "logs/llm_agent_phase1.jsonl"
 
 # Override the default system prompt (leave empty to use the built-in).
 AiPlayerbot.LlmAgent.SystemPrompt = ""
+
+####################################################################################################
+# LLM AGENT (Phase 2 — validator + apply path)
+#
+# Phase 2 adds the apply path: when the LLM's proposed transition validates,
+# we actually drive NewRpgInfo. Default ApplyMode = "log" preserves Phase 1
+# behavior. Use "shadow" for an intermediate safety mode that records what
+# WOULD have been applied without changing bot behavior. Use "apply" for
+# production.
+
+# ApplyMode: log | shadow | apply
+# Default: log
+AiPlayerbot.LlmAgent.ApplyMode = "log"
+
+# Percentage of bots (selected by GUID hash) that get the LLM path.
+# 0 = no bots LLM-enhanced. 100 = all bots. Combine with SocialOptIn = 1
+# to additionally enable any bot a real player whispers or party-invites.
+# Default: 0
+AiPlayerbot.LlmAgent.SamplePct = 0
+
+# Auto-opt-in bots that real players whisper or invite to group.
+# Default: 1
+AiPlayerbot.LlmAgent.SocialOptIn = 1
+
+# Cap on the LLM's ttl_minutes value when computing apply-side cooldown.
+# Default: 60
+AiPlayerbot.LlmAgent.MaxCooldownMinutes = 60
+
+# Cooldown applied after any non-accepted outcome (transport error,
+# schema error, validator reject, timeout).
+# Default: 300000 (5 minutes)
+AiPlayerbot.LlmAgent.FallbackCooldownMs = 300000
+
+# Ring buffer length for the digest's event_log field. 0 disables.
+# Default: 20
+AiPlayerbot.LlmAgent.EventLogSize = 20
