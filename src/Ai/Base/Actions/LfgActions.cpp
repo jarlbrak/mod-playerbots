@@ -89,9 +89,12 @@ bool LfgJoinAction::JoinLFG()
     if (state != LFG_STATE_NONE)
     {
         if (bot->GetGUID().GetCounter() % 100 == 0)
-            LOG_INFO("playerbots.lfg",
-                "Bot {} lvl{} JoinLFG: early-return on state={}",
+        {
+            fprintf(stderr,
+                "[f3.5-diag] Bot %s lvl%u JoinLFG: early-return state=%d\n",
                 bot->GetName().c_str(), bot->GetLevel(), (int)state);
+            fflush(stderr);
+        }
         return false;
     }
 
@@ -109,9 +112,12 @@ bool LfgJoinAction::JoinLFG()
 
     std::vector<uint32> dungeons = RandomPlayerbotMgr::instance().LfgDungeons[bot->GetTeamId()];
     if (bot->GetGUID().GetCounter() % 100 == 0)
-        LOG_INFO("playerbots.lfg",
-            "Bot {} lvl{} JoinLFG: state=NONE, dungeons.size()={}",
+    {
+        fprintf(stderr,
+            "[f3.5-diag] Bot %s lvl%u JoinLFG: state=NONE, dungeons.size=%zu\n",
             bot->GetName().c_str(), bot->GetLevel(), dungeons.size());
+        fflush(stderr);
+    }
     if (!dungeons.size())
         return false;
 
@@ -134,10 +140,13 @@ bool LfgJoinAction::JoinLFG()
     }
 
     if (bot->GetGUID().GetCounter() % 100 == 0)
-        LOG_INFO("playerbots.lfg",
-            "Bot {} lvl{} filter result: selected.size()={}, list.size()={}",
+    {
+        fprintf(stderr,
+            "[f3.5-diag] Bot %s lvl%u filter: selected=%zu, list=%zu\n",
             bot->GetName().c_str(), bot->GetLevel(),
             selected.size(), list.size());
+        fflush(stderr);
+    }
 
     if (!selected.size())
         return false;
