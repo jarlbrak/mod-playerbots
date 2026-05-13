@@ -69,3 +69,27 @@ sustained 1-hour GPU load and rebooted, losing the run):
   105°C; junction crit 110°C / emergency 115°C; mem crit 100°C /
   emergency 105°C. Any one of these will trigger hardware-level
   shutdown.
+
+ROCm sibling service (Phase 0.5 ROCm comparison pass):
+
+```bash
+BAZPASS=$(security find-internet-password -s '192.168.1.3' -a 'brackin' -w)
+ALIAS="sshpass -p $BAZPASS ssh -o StrictHostKeyChecking=no brackin@192.168.1.3"
+
+sshpass -p "$BAZPASS" scp -o StrictHostKeyChecking=no \
+  infra/heimdal/llama-server-rocm.container \
+  infra/heimdal/llama-server-rocm.env \
+  infra/heimdal/sudoers-llama-server \
+  brackin@192.168.1.3:/tmp/
+
+$ALIAS 'sudo install -m 0644 /tmp/llama-server-rocm.container /etc/containers/systemd/llama-server-rocm.container'
+$ALIAS 'sudo install -m 0644 /tmp/llama-server-rocm.env       /etc/llama-server-rocm.env'
+$ALIAS 'sudo install -m 0440 /tmp/sudoers-llama-server        /etc/sudoers.d/llama-server'
+$ALIAS 'sudo visudo -c -f /etc/sudoers.d/llama-server'
+$ALIAS 'sudo systemctl daemon-reload'
+# First pull the ROCm image (~8 GB; takes 1-3 min):
+$ALIAS 'podman pull ghcr.io/ggml-org/llama.cpp:server-rocm'
+# Vulkan and ROCm services both bind 127.0.0.1:8080 — stop one before starting the other.
+$ALIAS 'sudo systemctl stop llama-server.service; sudo systemctl start llama-server-rocm.service'
+$ALIAS 'curl -s http://127.0.0.1:8080/health'
+```
