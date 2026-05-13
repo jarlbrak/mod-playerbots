@@ -7,3 +7,9 @@ const char* const kDefaultSystemPrompt =
     "Pick a goal that is plausible for the character's level, location, and "
     "current objectives. Prefer continuing existing quests over starting new "
     "ones when progress is partial. Be concise in `reasoning`.";
+
+LlmApplyMode ParseApplyMode(const std::string& s) {
+    if (s == "apply")  return LlmApplyMode::Apply;
+    if (s == "shadow") return LlmApplyMode::Shadow;
+    return LlmApplyMode::Log;  // default + unknown
+}

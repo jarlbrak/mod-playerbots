@@ -57,3 +57,52 @@ TEST_CASE("LlmAgentConfig overrides applied") {
     CHECK(cfg.JsonlPath == "/var/log/llm.jsonl");
     CHECK(cfg.SystemPrompt == "Custom prompt.");
 }
+
+TEST_CASE("LlmAgentConfig Phase 2 defaults") {
+    StubConfigSource src;
+    LlmAgentConfig cfg = LoadLlmAgentConfig(src);
+
+    CHECK(cfg.ApplyMode == LlmApplyMode::Log);
+    CHECK(cfg.SamplePct == 0u);
+    CHECK(cfg.SocialOptIn == true);
+    CHECK(cfg.MaxCooldownMinutes == 60u);
+    CHECK(cfg.FallbackCooldownMs == 300000u);
+    CHECK(cfg.EventLogSize == 20u);
+}
+
+TEST_CASE("LlmAgentConfig Phase 2 overrides applied") {
+    StubConfigSource src;
+    src.values["AiPlayerbot.LlmAgent.ApplyMode"]          = "apply";
+    src.values["AiPlayerbot.LlmAgent.SamplePct"]          = "25";
+    src.values["AiPlayerbot.LlmAgent.SocialOptIn"]        = "0";
+    src.values["AiPlayerbot.LlmAgent.MaxCooldownMinutes"] = "30";
+    src.values["AiPlayerbot.LlmAgent.FallbackCooldownMs"] = "120000";
+    src.values["AiPlayerbot.LlmAgent.EventLogSize"]       = "50";
+
+    LlmAgentConfig cfg = LoadLlmAgentConfig(src);
+
+    CHECK(cfg.ApplyMode == LlmApplyMode::Apply);
+    CHECK(cfg.SamplePct == 25u);
+    CHECK(cfg.SocialOptIn == false);
+    CHECK(cfg.MaxCooldownMinutes == 30u);
+    CHECK(cfg.FallbackCooldownMs == 120000u);
+    CHECK(cfg.EventLogSize == 50u);
+}
+
+TEST_CASE("LlmAgentConfig ApplyMode parses shadow") {
+    StubConfigSource src;
+    src.values["AiPlayerbot.LlmAgent.ApplyMode"] = "shadow";
+    CHECK(LoadLlmAgentConfig(src).ApplyMode == LlmApplyMode::Shadow);
+}
+
+TEST_CASE("LlmAgentConfig ApplyMode parses log") {
+    StubConfigSource src;
+    src.values["AiPlayerbot.LlmAgent.ApplyMode"] = "log";
+    CHECK(LoadLlmAgentConfig(src).ApplyMode == LlmApplyMode::Log);
+}
+
+TEST_CASE("LlmAgentConfig ApplyMode falls back to Log on unknown value") {
+    StubConfigSource src;
+    src.values["AiPlayerbot.LlmAgent.ApplyMode"] = "garbage";
+    CHECK(LoadLlmAgentConfig(src).ApplyMode == LlmApplyMode::Log);
+}
