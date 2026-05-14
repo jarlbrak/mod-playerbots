@@ -52,9 +52,13 @@ protected:
     const int32 statusRestDuration = 30 * IN_MILLISECONDS ;
     const int32 statusDoQuestDuration = 30 * MINUTE  * IN_MILLISECONDS ;
     // F4 P2: hard cap on DO_QUEST persistence to prevent stuck-forever bots
-    // when LocalQuestsRemaining keeps returning true due to a single
-    // unreachable POI. 2 hours.
-    const int32 statusDoQuestDurationMax = 2 * HOUR * IN_MILLISECONDS;
+    // when LocalQuestsRemaining keeps returning true due to an unreachable
+    // POI, an over-leveled in-progress quest, or zone-edge clipping.
+    // Tuned down from 2h to 30 min on 2026-05-14 after observing P2 deploy
+    // produced 31/hr vs P1's 63/hr — bots were getting stuck for the full
+    // cap on dead-end quests at level 15+ as the bot pool matured past
+    // bracket-1 sweet-spot quest content.
+    const int32 statusDoQuestDurationMax = 30 * MINUTE * IN_MILLISECONDS;
     const int32 statusOutDoorPvPDuration = HOUR * IN_MILLISECONDS ;
 };
 
