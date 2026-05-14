@@ -34,6 +34,7 @@ add_executable(llmagent_unit_tests
   test_tool_parser.cpp
   test_tool_validators.cpp
   test_persona_cache.cpp
+  test_chat_envelope_parser.cpp
   ${LLMAGENT_DIR}/LlmAgentConfig.cpp
   ${LLMAGENT_DIR}/Schemas/Goal.cpp
   ${LLMAGENT_DIR}/Client/LlmHttpClient.cpp
@@ -52,6 +53,7 @@ add_executable(llmagent_unit_tests
   ${LLMAGENT_DIR}/Tools/ToolValidators.cpp
   ${LLMAGENT_DIR}/Tools/InteractionContext.cpp
   ${LLMAGENT_DIR}/Chat/PersonaCache.cpp
+  ${LLMAGENT_DIR}/Schemas/ChatEnvelope.cpp
 )
 
 target_include_directories(llmagent_unit_tests PRIVATE
