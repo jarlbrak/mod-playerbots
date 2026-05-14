@@ -21,6 +21,7 @@
 #include "RandomPlayerbotMgr.h"
 #include "ScriptMgr.h"
 #include "Bot/LlmAgent/LlmAgentManager.h"
+#include "Bot/LlmAgent/Chat/WhisperBuffer.h"
 #include "ObjectAccessor.h"
 
 #include <ctime>
@@ -43,6 +44,10 @@ public:
             {"inject_invite",  HandleT2InjectInvite,  SEC_GAMEMASTER, Console::Yes},
         };
 
+        static ChatCommandTable playerbotsT3CommandTable = {
+            {"inject_whisper", HandleT3InjectWhisper, SEC_GAMEMASTER, Console::Yes},
+        };
+
         static ChatCommandTable playerbotsAccountCommandTable = {
             {"setKey", HandleSetSecurityKeyCommand, SEC_PLAYER, Console::No},
             {"link", HandleLinkAccountCommand, SEC_PLAYER, Console::No},
@@ -57,6 +62,7 @@ public:
             {"rndbot", HandleRandomPlayerbotCommand, SEC_GAMEMASTER, Console::Yes},
             {"debug", playerbotsDebugCommandTable},
             {"t2",    playerbotsT2CommandTable},
+            {"t3",    playerbotsT3CommandTable},
             {"account", playerbotsAccountCommandTable},
         };
 
@@ -159,6 +165,54 @@ public:
             from_name, from_guid, text,
             static_cast<int64_t>(time(nullptr)));
         handler->PSendSysMessage("T2 whisper injected for %s", bot_name.c_str());
+        return true;
+    }
+
+    static bool HandleT3InjectWhisper(ChatHandler* handler, char const* args)
+    {
+        if (!args || !*args)
+        {
+            handler->PSendSysMessage("usage: .playerbots t3 inject_whisper <bot_name> <text>");
+            return true;
+        }
+        std::string a(args);
+        auto sp = a.find(' ');
+        if (sp == std::string::npos)
+        {
+            handler->PSendSysMessage("usage: .playerbots t3 inject_whisper <bot_name> <text>");
+            return true;
+        }
+        std::string bot_name = a.substr(0, sp);
+        std::string text     = a.substr(sp + 1);
+        Player* bot = ObjectAccessor::FindPlayerByName(bot_name);
+        if (!bot)
+        {
+            handler->PSendSysMessage("bot %s not found", bot_name.c_str());
+            return true;
+        }
+        auto& mgr = LlmAgentManager::Instance();
+        if (mgr.Config().SocialOptIn)
+            mgr.Selector().OptInBot(bot->GetGUID().GetRawValue());
+
+        std::string from_name = "GM";
+        uint64_t    from_guid = 0;
+        if (handler->GetSession())
+        {
+            from_name = handler->GetSession()->GetPlayerName();
+            if (Player* p = handler->GetSession()->GetPlayer())
+                from_guid = p->GetGUID().GetRawValue();
+        }
+
+        const int64_t now = static_cast<int64_t>(time(nullptr));
+        mgr.Interactions().PushWhisper(
+            bot->GetGUID().GetRawValue(),
+            from_name, from_guid, text, now);
+        mgr.Whispers().Push(
+            bot->GetGUID().GetRawValue(),
+            from_guid,
+            WhisperEntry::Incoming,
+            text, now);
+        handler->PSendSysMessage("T3 whisper injected for %s", bot_name.c_str());
         return true;
     }
 
