@@ -29,9 +29,16 @@ struct LlmAgentConfig {
     bool        MemorySidecar_EnableWrites     = true;
     uint32_t    MemorySidecar_RecallTopK       = 3;
     uint32_t    MemorySidecar_HintMaxChars     = 1200;
+
+    // Phase 4 — Tier 2 interactive
+    bool        Tier2_Enabled              = true;
+    uint32_t    Tier2_MaxToolsPerResponse  = 3;
+    uint32_t    Tier2_WhisperWindowSeconds = 120;
+    std::string Tier2_SystemPrompt;
 };
 
 extern const char* const kDefaultSystemPrompt;
+extern const char* const kDefaultTier2SystemPrompt;
 
 LlmApplyMode ParseApplyMode(const std::string& s);
 
@@ -59,6 +66,11 @@ LlmAgentConfig LoadLlmAgentConfig(const Source& src) {
     cfg.MemorySidecar_EnableWrites     = src.template Get<bool>       ("AiPlayerbot.MemorySidecar.EnableWrites",     true);
     cfg.MemorySidecar_RecallTopK       = src.template Get<uint32_t>   ("AiPlayerbot.MemorySidecar.RecallTopK",       uint32_t{3});
     cfg.MemorySidecar_HintMaxChars     = src.template Get<uint32_t>   ("AiPlayerbot.MemorySidecar.HintMaxChars",     uint32_t{1200});
+
+    cfg.Tier2_Enabled              = src.template Get<bool>       ("AiPlayerbot.LlmAgent.Tier2.Enabled",              true);
+    cfg.Tier2_MaxToolsPerResponse  = src.template Get<uint32_t>   ("AiPlayerbot.LlmAgent.Tier2.MaxToolsPerResponse",  uint32_t{3});
+    cfg.Tier2_WhisperWindowSeconds = src.template Get<uint32_t>   ("AiPlayerbot.LlmAgent.Tier2.WhisperWindowSeconds", uint32_t{120});
+    cfg.Tier2_SystemPrompt         = src.template Get<std::string>("AiPlayerbot.LlmAgent.Tier2.SystemPrompt",         std::string{kDefaultTier2SystemPrompt});
     return cfg;
 }
 

@@ -132,3 +132,26 @@ TEST_CASE("LlmAgentConfig MemorySidecar overrides applied") {
     CHECK(cfg.MemorySidecar_RecallTopK == 5u);
     CHECK(cfg.MemorySidecar_HintMaxChars == 800u);
 }
+
+TEST_CASE("LlmAgentConfig Tier2 defaults") {
+    StubConfigSource src;
+    LlmAgentConfig cfg = LoadLlmAgentConfig(src);
+    CHECK(cfg.Tier2_Enabled == true);
+    CHECK(cfg.Tier2_MaxToolsPerResponse == 3u);
+    CHECK(cfg.Tier2_WhisperWindowSeconds == 120u);
+    CHECK(!cfg.Tier2_SystemPrompt.empty());
+}
+
+TEST_CASE("LlmAgentConfig Tier2 overrides applied") {
+    StubConfigSource src;
+    src.values["AiPlayerbot.LlmAgent.Tier2.Enabled"] = "0";
+    src.values["AiPlayerbot.LlmAgent.Tier2.MaxToolsPerResponse"] = "5";
+    src.values["AiPlayerbot.LlmAgent.Tier2.WhisperWindowSeconds"] = "300";
+    src.values["AiPlayerbot.LlmAgent.Tier2.SystemPrompt"] = "custom";
+
+    LlmAgentConfig cfg = LoadLlmAgentConfig(src);
+    CHECK(cfg.Tier2_Enabled == false);
+    CHECK(cfg.Tier2_MaxToolsPerResponse == 5u);
+    CHECK(cfg.Tier2_WhisperWindowSeconds == 300u);
+    CHECK(cfg.Tier2_SystemPrompt == "custom");
+}

@@ -46,6 +46,16 @@ LlmCounters::Snapshot_t LlmCounters::Snapshot() const {
         std::lock_guard<std::mutex> g(rejected_mu_);
         s.rejected_by_reason = rejected_by_reason_;
     }
+    {
+        std::lock_guard<std::mutex> g(tool_mu_);
+        s.tool_received = tool_received_;
+        s.tool_applied = tool_applied_;
+        s.tool_rejected_by_reason = tool_rejected_;
+        s.tool_threw = tool_threw_;
+    }
+    s.tool_no_action = tool_no_action_.load(std::memory_order_relaxed);
+    s.tool_truncated = tool_truncated_.load(std::memory_order_relaxed);
+    s.tool_schema_error = tool_schema_error_.load(std::memory_order_relaxed);
     return s;
 }
 
@@ -68,7 +78,36 @@ void LlmCounters::DumpToLog() const {
     for (const auto& [k, v] : s.rejected_by_reason) {
         out << " " << k << "=" << v;
     }
+    out << " tool_no_action=" << s.tool_no_action
+        << " tool_truncated=" << s.tool_truncated
+        << " tool_schema_error=" << s.tool_schema_error;
+    for (const auto& [k, v] : s.tool_received) {
+        out << " tool_recv[" << k << "]=" << v;
+    }
+    for (const auto& [k, v] : s.tool_applied) {
+        out << " tool_applied[" << k << "]=" << v;
+    }
 #ifndef LLMAGENT_UNIT_TESTS
     LOG_INFO("playerbots", "{}", out.str());
 #endif
 }
+
+void LlmCounters::IncToolReceived(const std::string& name) {
+    std::lock_guard<std::mutex> g(tool_mu_);
+    ++tool_received_[name];
+}
+void LlmCounters::IncToolApplied(const std::string& name) {
+    std::lock_guard<std::mutex> g(tool_mu_);
+    ++tool_applied_[name];
+}
+void LlmCounters::IncToolRejected(const std::string& reason) {
+    std::lock_guard<std::mutex> g(tool_mu_);
+    ++tool_rejected_[reason];
+}
+void LlmCounters::IncToolThrew(const std::string& name) {
+    std::lock_guard<std::mutex> g(tool_mu_);
+    ++tool_threw_[name];
+}
+void LlmCounters::IncToolNoAction()    { tool_no_action_.fetch_add(1, std::memory_order_relaxed); }
+void LlmCounters::IncToolTruncated()   { tool_truncated_.fetch_add(1, std::memory_order_relaxed); }
+void LlmCounters::IncToolSchemaError() { tool_schema_error_.fetch_add(1, std::memory_order_relaxed); }

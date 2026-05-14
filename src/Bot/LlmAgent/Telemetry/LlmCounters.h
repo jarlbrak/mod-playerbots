@@ -23,6 +23,13 @@ class LlmCounters {
         uint64_t fallback_used = 0;
         uint64_t applied_threw = 0;
         std::unordered_map<std::string, uint64_t> rejected_by_reason;
+        std::unordered_map<std::string, uint64_t> tool_received;
+        std::unordered_map<std::string, uint64_t> tool_applied;
+        std::unordered_map<std::string, uint64_t> tool_rejected_by_reason;
+        std::unordered_map<std::string, uint64_t> tool_threw;
+        uint64_t tool_no_action = 0;
+        uint64_t tool_truncated = 0;
+        uint64_t tool_schema_error = 0;
     };
 
     void IncEnqueued();
@@ -34,6 +41,14 @@ class LlmCounters {
     void IncLogAcceptedSkipped();
     void IncFallbackUsed();
     void IncAppliedThrew();
+
+    void IncToolReceived(const std::string& name);
+    void IncToolApplied(const std::string& name);
+    void IncToolRejected(const std::string& reason);
+    void IncToolThrew(const std::string& name);
+    void IncToolNoAction();
+    void IncToolTruncated();
+    void IncToolSchemaError();
 
     Snapshot_t Snapshot() const;
     void DumpToLog() const;
@@ -54,6 +69,15 @@ class LlmCounters {
 
     mutable std::mutex                             rejected_mu_;
     std::unordered_map<std::string, uint64_t>      rejected_by_reason_;
+
+    mutable std::mutex                             tool_mu_;
+    std::unordered_map<std::string, uint64_t>      tool_received_;
+    std::unordered_map<std::string, uint64_t>      tool_applied_;
+    std::unordered_map<std::string, uint64_t>      tool_rejected_;
+    std::unordered_map<std::string, uint64_t>      tool_threw_;
+    std::atomic<uint64_t>                          tool_no_action_{0};
+    std::atomic<uint64_t>                          tool_truncated_{0};
+    std::atomic<uint64_t>                          tool_schema_error_{0};
 };
 
 #endif

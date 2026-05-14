@@ -73,3 +73,45 @@ TEST_CASE("LlmCounters rejected_by_reason accumulates per reason") {
     CHECK(s.rejected_by_reason["rejected_quest_not_in_log"] == 2);
     CHECK(s.rejected_by_reason["rejected_map_mismatch"] == 1);
 }
+
+TEST_CASE("LlmCounters tool counters increment per tool name") {
+    LlmCounters c;
+    c.IncToolReceived("set_goal");
+    c.IncToolReceived("set_goal");
+    c.IncToolApplied("set_goal");
+    c.IncToolApplied("accept_party_invite");
+    c.IncToolRejected("rejected_npc_not_in_range");
+    c.IncToolThrew("vendor_junk");
+    c.IncToolNoAction();
+    c.IncToolTruncated();
+    c.IncToolSchemaError();
+
+    auto s = c.Snapshot();
+    CHECK(s.tool_received["set_goal"] == 2);
+    CHECK(s.tool_applied["set_goal"] == 1);
+    CHECK(s.tool_applied["accept_party_invite"] == 1);
+    CHECK(s.tool_rejected_by_reason["rejected_npc_not_in_range"] == 1);
+    CHECK(s.tool_threw["vendor_junk"] == 1);
+    CHECK(s.tool_no_action == 1);
+    CHECK(s.tool_truncated == 1);
+    CHECK(s.tool_schema_error == 1);
+}
+
+TEST_CASE("LlmCounters tool counters thread-safe under contention") {
+    LlmCounters c;
+    constexpr int N = 4;
+    constexpr int PER = 1000;
+    std::vector<std::thread> threads;
+    for (int t = 0; t < N; ++t) {
+        threads.emplace_back([&]{
+            for (int i = 0; i < PER; ++i) {
+                c.IncToolReceived("set_goal");
+                c.IncToolApplied("set_goal");
+            }
+        });
+    }
+    for (auto& th : threads) th.join();
+    auto s = c.Snapshot();
+    CHECK(s.tool_received["set_goal"] == N * PER);
+    CHECK(s.tool_applied["set_goal"] == N * PER);
+}
