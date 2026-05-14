@@ -159,16 +159,41 @@ const char* const kT2ToolsJsonSchema = R"([
 
 const char* const kT2ToolCallOutputSchema = R"({
   "type": "array",
+  "minItems": 1,
+  "maxItems": 1,
   "items": {
-    "type": "object",
-    "required": ["name", "arguments"],
-    "properties": {
-      "name": {
-        "type": "string",
-        "enum": ["accept_party_invite", "leave_party", "set_goal", "memory.remember"]
-      },
-      "arguments": {"type": "object"}
-    }
+    "oneOf": [
+      {"type":"object","required":["name","arguments"],"additionalProperties":false,
+       "properties":{
+         "name":{"const":"accept_party_invite"},
+         "arguments":{"type":"object","required":["from"],"additionalProperties":false,
+           "properties":{"from":{"type":"string"}}}}},
+      {"type":"object","required":["name","arguments"],"additionalProperties":false,
+       "properties":{
+         "name":{"const":"leave_party"},
+         "arguments":{"type":"object","additionalProperties":false}}},
+      {"type":"object","required":["name","arguments"],"additionalProperties":false,
+       "properties":{
+         "name":{"const":"set_goal"},
+         "arguments":{"type":"object",
+           "required":["goal","params","reasoning","ttl_minutes"],
+           "additionalProperties":false,
+           "properties":{
+             "goal":{"type":"string","enum":["idle","rest","go_grind","wander_npc","wander_random","do_quest"]},
+             "params":{"type":"object"},
+             "reasoning":{"type":"string","maxLength":200},
+             "ttl_minutes":{"type":"integer","minimum":1,"maximum":1440}}}}},
+      {"type":"object","required":["name","arguments"],"additionalProperties":false,
+       "properties":{
+         "name":{"const":"memory.remember"},
+         "arguments":{"type":"object",
+           "required":["text","entities","salience"],
+           "additionalProperties":false,
+           "properties":{
+             "text":{"type":"string","maxLength":300},
+             "entities":{"type":"array","items":{"type":"string"}},
+             "salience":{"type":"number","minimum":0,"maximum":1}}}}}
+    ]
   }
 })";
 
