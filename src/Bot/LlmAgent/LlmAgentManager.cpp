@@ -198,13 +198,21 @@ void LlmAgentManager::HandleRequest(LlmRequest req) {
         }
         if (result.parsed_status.empty()) {
             result.raw_response = truncate(content, 4096);
-            auto parsed = ParseAndValidate(content);
-            if (std::holds_alternative<ParsedGoal>(parsed)) {
-                result.parsed_status = "ok";
-                result.parsed_goal = parsed_goal_to_json(std::get<ParsedGoal>(parsed));
+            // Tier 1 (goal replan): worker validates against Phase 1 goal schema.
+            // Tier 2 (interactive): worker leaves the raw response unparsed —
+            //   LlmInteractAction calls ParseToolCalls on the array of {name,
+            //   arguments} elements. T2 success/schema_error is recorded there.
+            if (req.tier == 1) {
+                auto parsed = ParseAndValidate(content);
+                if (std::holds_alternative<ParsedGoal>(parsed)) {
+                    result.parsed_status = "ok";
+                    result.parsed_goal = parsed_goal_to_json(std::get<ParsedGoal>(parsed));
+                } else {
+                    result.parsed_status = "schema_error";
+                    result.validator_error = std::get<ParseError>(parsed).message;
+                }
             } else {
-                result.parsed_status = "schema_error";
-                result.validator_error = std::get<ParseError>(parsed).message;
+                result.parsed_status = "ok";  // tool-call shape verified downstream
             }
         }
     }
