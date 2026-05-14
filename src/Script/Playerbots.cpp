@@ -19,6 +19,7 @@
 
 #include "BattlefieldScript.h"
 #include "Channel.h"
+#include "GroupScript.h"
 #include "Config.h"
 #include "DatabaseEnv.h"
 #include "DatabaseLoader.h"
@@ -535,6 +536,38 @@ public:
     PlayerbotsBattlefieldScript() : BattlefieldScript("PlayerbotsBattlefieldScript") { }
 };
 
+class PlayerbotsGroupScript : public GroupScript
+{
+public:
+    PlayerbotsGroupScript() : GroupScript("PlayerbotsGroupScript", {
+        GROUPHOOK_ON_ADD_MEMBER,
+        GROUPHOOK_ON_INVITE_MEMBER
+    }) {}
+
+    void OnInviteMember(Group* group, ObjectGuid guid) override
+    {
+        if (!group) return;
+        Player* invitee = ObjectAccessor::FindPlayer(guid);
+        if (!invitee) return;
+        if (PlayerbotsMgr::instance().GetPlayerbotAI(invitee) == nullptr) return;  // only forward for bots
+        Player* inviter = ObjectAccessor::FindPlayer(group->GetLeaderGUID());
+        if (!inviter) return;
+        LlmAgentHooks::OnPartyInviteReceived(invitee, inviter);
+    }
+
+    void OnAddMember(Group* group, ObjectGuid guid) override
+    {
+        if (!group) return;
+        Player* joiner = ObjectAccessor::FindPlayer(guid);
+        if (!joiner) return;
+        if (PlayerbotsMgr::instance().GetPlayerbotAI(joiner) == nullptr) return;
+        Player* leader = ObjectAccessor::FindPlayer(group->GetLeaderGUID());
+        if (!leader) return;
+        if (leader == joiner) return;  // bot is the leader of its own newly-formed group; not a "joined someone else's group" event
+        LlmAgentHooks::OnGroupJoined(joiner, leader);
+    }
+};
+
 void AddPlayerbotsSecureLoginScripts();
 
 void AddSC_TempestKeepBotScripts();
@@ -542,6 +575,7 @@ void AddSC_TempestKeepBotScripts();
 void AddPlayerbotsScripts()
 {
     new PlayerbotsBattlefieldScript();
+    new PlayerbotsGroupScript();
     new PlayerbotsDatabaseScript();
     new PlayerbotsPlayerScript();
     new PlayerbotsMiscScript();
