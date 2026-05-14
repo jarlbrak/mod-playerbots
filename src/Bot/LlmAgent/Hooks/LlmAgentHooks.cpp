@@ -2,6 +2,7 @@
 
 #ifndef LLMAGENT_UNIT_TESTS
 #include "LlmAgentManager.h"
+#include "Chat/WhisperBuffer.h"
 #include "Player.h"
 #include "PlayerbotMgr.h"
 #include "DBCStores.h"
@@ -64,6 +65,11 @@ void OnWhisperReceived(Player* bot, Player* sender, const std::string& text) {
     mgr.Interactions().PushWhisper(
         bot_guid, sender->GetName(), sender->GetGUID().GetRawValue(),
         truncate_whisper(text), static_cast<int64_t>(time(nullptr)));
+    mgr.Whispers().Push(
+        bot_guid, sender->GetGUID().GetRawValue(),
+        WhisperEntry::Incoming,
+        truncate_whisper(text),
+        static_cast<int64_t>(time(nullptr)));
 #endif
     (void)bot; (void)sender; (void)text;  // silence unused-param in unit-test build
 }
