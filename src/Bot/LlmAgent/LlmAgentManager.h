@@ -64,6 +64,7 @@ class LlmAgentManager {
     const LlmAgentConfig& Config() const { return cfg_; }
     BotSelector&           Selector()        { return selector_; }
     BotCooldownMap&        Cooldowns()       { return cooldowns_; }
+    BotCooldownMap&        T2Cooldowns()     { return t2_cooldowns_; }
     RecentEventBuffer&     Events()          { return events_; }
     InteractionEventBuffer& Interactions()  { return interactions_; }
     LlmCounters&           Counters()        { return counters_; }
@@ -85,6 +86,7 @@ class LlmAgentManager {
     LlmAgentConfig                                cfg_;
     BotSelector                                   selector_;
     BotCooldownMap                                cooldowns_;
+    BotCooldownMap                                t2_cooldowns_;  // separate T2 cooldown
     RecentEventBuffer                             events_;
     InteractionEventBuffer                        interactions_;
     LlmCounters                                   counters_;

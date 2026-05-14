@@ -47,7 +47,7 @@ bool LlmInteractAction::Execute(Event /*event*/) {
     for (const auto& r : results) {
         if (r.parsed_status != "ok") {
             mgr.Counters().IncFallbackUsed();
-            mgr.Cooldowns().Set(guid,
+            mgr.T2Cooldowns().Set(guid,
                 std::chrono::steady_clock::now() +
                 std::chrono::milliseconds(cfg.FallbackCooldownMs));
             continue;
@@ -55,7 +55,7 @@ bool LlmInteractAction::Execute(Event /*event*/) {
         auto parsed = ParseToolCalls(r.raw_response);
         if (std::holds_alternative<ParseError>(parsed)) {
             mgr.Counters().IncToolSchemaError();
-            mgr.Cooldowns().Set(guid,
+            mgr.T2Cooldowns().Set(guid,
                 std::chrono::steady_clock::now() +
                 std::chrono::milliseconds(cfg.FallbackCooldownMs));
             continue;
@@ -63,7 +63,7 @@ bool LlmInteractAction::Execute(Event /*event*/) {
         const auto& calls = std::get<std::vector<ParsedToolCall>>(parsed);
         if (calls.empty()) {
             mgr.Counters().IncToolNoAction();
-            mgr.Cooldowns().Set(guid,
+            mgr.T2Cooldowns().Set(guid,
                 std::chrono::steady_clock::now() +
                 std::chrono::milliseconds(cfg.FallbackCooldownMs));
             continue;
@@ -101,14 +101,14 @@ bool LlmInteractAction::Execute(Event /*event*/) {
             }
         }
         mgr.Interactions().Clear(guid);
-        mgr.Cooldowns().Set(guid,
+        mgr.T2Cooldowns().Set(guid,
             std::chrono::steady_clock::now() +
             std::chrono::milliseconds(cfg.FallbackCooldownMs));
     }
 
     if (!applied_any &&
         mgr.Selector().IsLlmBot(guid) &&
-        mgr.Cooldowns().Eligible(guid) &&
+        mgr.T2Cooldowns().Eligible(guid) &&
         !mgr.IsInFlight(guid, /*tier=*/2) &&
         mgr.Interactions().HasPending(guid))
     {

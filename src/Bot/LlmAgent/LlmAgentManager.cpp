@@ -93,6 +93,7 @@ void LlmAgentManager::Shutdown() {
     counters_.DumpToLog();
     selector_.Clear();
     cooldowns_.Clear();
+    t2_cooldowns_.Clear();
     events_.ClearAll();
     interactions_.ClearAll();
     if (jsonl_.is_open()) jsonl_.close();
@@ -213,6 +214,7 @@ void LlmAgentManager::HandleRequest(LlmRequest req) {
     // Append JSONL line.
     nlohmann::json record;
     record["ts_completed_ms_epoch"] = epoch_ms();
+    record["tier"] = req.tier;
     record["bot_guid"] = req.bot_guid;
     record["bot_name"] = req.bot_name;
     record["queue_wait_ms"] = result.queue_wait_ms;

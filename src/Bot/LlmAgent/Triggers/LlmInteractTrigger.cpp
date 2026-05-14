@@ -15,7 +15,7 @@ bool LlmInteractTrigger::IsActive() {
     uint64_t guid = bot->GetGUID().GetRawValue();
 
     if (!mgr.Selector().IsLlmBot(guid)) return false;
-    if (!mgr.Cooldowns().Eligible(guid)) return false;
+    if (!mgr.T2Cooldowns().Eligible(guid)) return false;
 
     mgr.Interactions().ExpireOlderThan(
         guid, static_cast<int64_t>(time(nullptr)),
