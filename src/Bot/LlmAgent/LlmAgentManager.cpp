@@ -3,7 +3,9 @@
 #include "Schemas/Goal.h"
 
 #include <chrono>
+#include <ctime>
 #include <filesystem>
+#include <optional>
 #include <sstream>
 #include <utility>
 
@@ -67,6 +69,15 @@ void LlmAgentManager::Start(LlmAgentConfig cfg) {
         cfg_.MemorySidecar_Endpoint,
         std::chrono::milliseconds(cfg_.MemorySidecar_RequestTimeoutMs));
 
+#ifndef LLMAGENT_UNIT_TESTS
+    persona_ = std::make_unique<PersonaCache>(
+        [this](uint64_t guid) -> std::optional<std::string> {
+            return memory_client_->GetPersonality(guid);
+        },
+        static_cast<int64_t>(cfg_.Tier3_PersonaCacheTtlSeconds),
+        []{ return static_cast<int64_t>(time(nullptr)); });
+#endif
+
     if (!cfg_.Enabled) return;
 
     // Open JSONL (parent dir created if missing).
@@ -98,6 +109,9 @@ void LlmAgentManager::Shutdown() {
     interactions_.ClearAll();
     whispers_.ClearAll();
     t3_cooldowns_.Clear();
+#ifndef LLMAGENT_UNIT_TESTS
+    if (persona_) persona_->ClearAll();
+#endif
     if (jsonl_.is_open()) jsonl_.close();
 }
 

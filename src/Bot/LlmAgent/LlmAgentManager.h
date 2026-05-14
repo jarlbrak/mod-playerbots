@@ -8,6 +8,7 @@
 #include "EventBuffer/RecentEventBuffer.h"
 #include "EventBuffer/InteractionEventBuffer.h"
 #include "Chat/WhisperBuffer.h"
+#include "Chat/PersonaCache.h"
 #include "Telemetry/LlmCounters.h"
 #include "Client/MemoryHttpClient.h"
 
@@ -72,6 +73,9 @@ class LlmAgentManager {
     BotCooldownMap&        T3Cooldowns()      { return t3_cooldowns_; }
     LlmCounters&           Counters()        { return counters_; }
     MemoryHttpClient&      MemoryClient()    { return *memory_client_; }
+#ifndef LLMAGENT_UNIT_TESTS
+    PersonaCache&          Persona()          { return *persona_; }
+#endif
     LlmApplyMode        ApplyMode() const { return cfg_.ApplyMode; }
     bool IsInFlight(uint64_t bot_guid, uint32_t tier = 1) const;
     bool HasPendingResults(uint64_t bot_guid, uint32_t tier = 1) const;
@@ -96,6 +100,9 @@ class LlmAgentManager {
     InteractionEventBuffer                        interactions_;
     LlmCounters                                   counters_;
     std::unique_ptr<MemoryHttpClient>             memory_client_;
+#ifndef LLMAGENT_UNIT_TESTS
+    std::unique_ptr<PersonaCache>                 persona_;
+#endif
     std::atomic<bool>                             running_{false};
     std::vector<std::thread>                      workers_;
 
