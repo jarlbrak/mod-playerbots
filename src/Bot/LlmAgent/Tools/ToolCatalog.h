@@ -40,6 +40,15 @@ extern const char* const kT2ToolsJsonSchema;
 // text. Constrained generation with a JSON schema forces the right shape.
 extern const char* const kT2ToolCallOutputSchema;
 
+// String constant containing the four oneOf branches (accept_party_invite,
+// leave_party, set_goal, memory.remember) used by both kT2ToolCallOutputSchema
+// and kT3OutputSchema. Concatenated into those constants at compile time.
+extern const char* const kToolCallOneOf;
+
+// Phase 5: T3 output envelope schema. Constrains the model's response to
+// {"utterance": <=200-char string, "side_effects": <=3 tool calls}.
+extern const char* const kT3OutputSchema;
+
 std::variant<std::vector<ParsedToolCall>, ParseError>
 ParseToolCalls(const std::string& raw_json);
 

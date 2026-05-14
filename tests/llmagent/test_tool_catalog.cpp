@@ -74,3 +74,18 @@ TEST_CASE("memory.remember has text/entities/salience required") {
     }
     FAIL("memory.remember missing from catalog");
 }
+
+TEST_CASE("kT3OutputSchema parses and constrains utterance + side_effects") {
+    auto j = nlohmann::json::parse(kT3OutputSchema);
+    REQUIRE(j["type"] == "object");
+    auto req = j["required"];
+    bool has_utt = false, has_sfx = false;
+    for (const auto& r : req) {
+        if (r == "utterance")    has_utt = true;
+        if (r == "side_effects") has_sfx = true;
+    }
+    CHECK(has_utt);
+    CHECK(has_sfx);
+    CHECK(j["properties"]["utterance"]["maxLength"] == 200);
+    CHECK(j["properties"]["side_effects"]["maxItems"] == 3);
+}
