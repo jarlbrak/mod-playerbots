@@ -56,8 +56,16 @@ std::string BuildT2RequestBody(PlayerbotAI* botAI) {
     body["messages"] = nlohmann::json::array();
     body["messages"].push_back({{"role", "system"}, {"content", cfg.Tier2_SystemPrompt}});
     body["messages"].push_back({{"role", "user"},   {"content", digest.dump()}});
-    body["tools"]       = nlohmann::json::parse(kT2ToolsJsonSchema);
-    body["tool_choice"] = "auto";
+    // Constrain output to the tool-call array shape. Qwen 2.5 7B ignores
+    // tools[]/tool_choice="auto" and returns plain text; response_format
+    // forces a parseable JSON array of {name, arguments}.
+    body["response_format"] = {
+        {"type", "json_schema"},
+        {"json_schema", {
+            {"name", "tool_calls"},
+            {"schema", nlohmann::json::parse(kT2ToolCallOutputSchema)}
+        }}
+    };
     body["temperature"] = 0.5;
     body["max_tokens"]  = 256;
     return body.dump();

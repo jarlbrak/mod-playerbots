@@ -157,6 +157,21 @@ const char* const kT2ToolsJsonSchema = R"([
           "properties":{"src":{"type":"string"},"rel":{"type":"string"},"dst":{"type":"string"}}}}}}}}
 ])";
 
+const char* const kT2ToolCallOutputSchema = R"({
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["name", "arguments"],
+    "properties": {
+      "name": {
+        "type": "string",
+        "enum": ["accept_party_invite", "leave_party", "set_goal", "memory.remember"]
+      },
+      "arguments": {"type": "object"}
+    }
+  }
+})";
+
 std::variant<std::vector<ParsedToolCall>, ParseError>
 ParseToolCalls(const std::string& raw_json) {
     nlohmann::json j;

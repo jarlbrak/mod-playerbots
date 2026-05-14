@@ -33,6 +33,13 @@ extern const char* const kToolsJsonSchema;
 // Omits quest/vendor tools; keeps accept_party_invite, leave_party, set_goal, memory.remember.
 extern const char* const kT2ToolsJsonSchema;
 
+// JSON Schema constraining the model's *output* to a tool-call array
+// `[{"name": <enum>, "arguments": <object>}, ...]`. Used with response_format
+// instead of tool_choice="auto" because Qwen 2.5 7B doesn't reliably emit
+// OpenAI-format tool_calls from a tools[] descriptor — it returns conversational
+// text. Constrained generation with a JSON schema forces the right shape.
+extern const char* const kT2ToolCallOutputSchema;
+
 std::variant<std::vector<ParsedToolCall>, ParseError>
 ParseToolCalls(const std::string& raw_json);
 
