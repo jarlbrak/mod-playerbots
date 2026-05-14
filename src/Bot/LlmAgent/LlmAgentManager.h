@@ -7,6 +7,7 @@
 #include "Cooldown/BotCooldownMap.h"
 #include "EventBuffer/RecentEventBuffer.h"
 #include "EventBuffer/InteractionEventBuffer.h"
+#include "Chat/WhisperBuffer.h"
 #include "Telemetry/LlmCounters.h"
 #include "Client/MemoryHttpClient.h"
 
@@ -67,6 +68,8 @@ class LlmAgentManager {
     BotCooldownMap&        T2Cooldowns()     { return t2_cooldowns_; }
     RecentEventBuffer&     Events()          { return events_; }
     InteractionEventBuffer& Interactions()  { return interactions_; }
+    WhisperBuffer&         Whispers()         { return whispers_; }
+    BotCooldownMap&        T3Cooldowns()      { return t3_cooldowns_; }
     LlmCounters&           Counters()        { return counters_; }
     MemoryHttpClient&      MemoryClient()    { return *memory_client_; }
     LlmApplyMode        ApplyMode() const { return cfg_.ApplyMode; }
@@ -87,6 +90,8 @@ class LlmAgentManager {
     BotSelector                                   selector_;
     BotCooldownMap                                cooldowns_;
     BotCooldownMap                                t2_cooldowns_;  // separate T2 cooldown
+    BotCooldownMap                                t3_cooldowns_;
+    WhisperBuffer                                 whispers_;
     RecentEventBuffer                             events_;
     InteractionEventBuffer                        interactions_;
     LlmCounters                                   counters_;

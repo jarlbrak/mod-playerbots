@@ -96,6 +96,8 @@ void LlmAgentManager::Shutdown() {
     t2_cooldowns_.Clear();
     events_.ClearAll();
     interactions_.ClearAll();
+    whispers_.ClearAll();
+    t3_cooldowns_.Clear();
     if (jsonl_.is_open()) jsonl_.close();
 }
 
