@@ -29,6 +29,8 @@ add_executable(llmagent_unit_tests
   test_event_buffer.cpp
   test_memory_client.cpp
   test_interaction_buffer.cpp
+  test_tool_catalog.cpp
+  test_tool_parser.cpp
   ${LLMAGENT_DIR}/LlmAgentConfig.cpp
   ${LLMAGENT_DIR}/Schemas/Goal.cpp
   ${LLMAGENT_DIR}/Client/LlmHttpClient.cpp
@@ -42,6 +44,7 @@ add_executable(llmagent_unit_tests
   ${LLMAGENT_DIR}/Validator/ValidationContext.cpp
   ${LLMAGENT_DIR}/EventBuffer/RecentEventBuffer.cpp
   ${LLMAGENT_DIR}/EventBuffer/InteractionEventBuffer.cpp
+  ${LLMAGENT_DIR}/Tools/ToolCatalog.cpp
 )
 
 target_include_directories(llmagent_unit_tests PRIVATE
