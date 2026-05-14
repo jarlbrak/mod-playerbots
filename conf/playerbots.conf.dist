@@ -2526,3 +2526,25 @@ AiPlayerbot.MemorySidecar.RecallTopK = 3
 # Cumulative hint character budget per digest.
 # Default: 1200
 AiPlayerbot.MemorySidecar.HintMaxChars = 1200
+
+####################################################################################################
+# LLM AGENT (Phase 4 — T2 interactive tool-calling)
+#
+# T2 fires when a real player engages with a bot via whisper, party invite,
+# or group join. The bot can emit tool calls — accept_party_invite, set_goal,
+# accept_quest, etc. — which are validated server-side before execution.
+
+# Default: 1 (enabled when LlmAgent.Enabled=1)
+AiPlayerbot.LlmAgent.Tier2.Enabled = 1
+
+# Hard cap on tool calls applied per LLM response (parsed in order, stop on
+# first validation failure except memory.remember which is non-blocking).
+# Default: 3
+AiPlayerbot.LlmAgent.Tier2.MaxToolsPerResponse = 3
+
+# Whispers older than this don't trigger T2.
+# Default: 120 (2 minutes)
+AiPlayerbot.LlmAgent.Tier2.WhisperWindowSeconds = 120
+
+# Override the default T2 system prompt (leave empty to use the built-in).
+AiPlayerbot.LlmAgent.Tier2.SystemPrompt = ""
