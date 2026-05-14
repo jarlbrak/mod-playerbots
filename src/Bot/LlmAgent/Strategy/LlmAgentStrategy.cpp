@@ -11,4 +11,10 @@ void LlmAgentStrategy::InitTriggers(std::vector<TriggerNode*>& triggers) {
             {NextAction("llm replan idle", 15.0f)}
         )
     );
+    triggers.push_back(
+        new TriggerNode(
+            "llm interact",
+            {NextAction("llm interact", 16.0f)}   // > T1's 15.0f so T2 outranks T1 when a human is engaged
+        )
+    );
 }
