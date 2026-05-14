@@ -35,10 +35,23 @@ struct LlmAgentConfig {
     uint32_t    Tier2_MaxToolsPerResponse  = 3;
     uint32_t    Tier2_WhisperWindowSeconds = 120;
     std::string Tier2_SystemPrompt;
+
+    // Phase 5 — Tier 3 chat brain
+    bool        Tier3_Enabled                  = true;
+    uint32_t    Tier3_CooldownMs               = 5000;     // per-bot nominal cooldown
+    uint32_t    Tier3_DialogueHistorySize      = 6;        // last N whispers per (bot, sender)
+    uint32_t    Tier3_WhisperWindowSeconds     = 600;      // age out dialogue at 10 min
+    uint32_t    Tier3_MaxUtteranceChars        = 200;
+    std::string Tier3_SystemPromptSuffix;                  // empty = use built-in
+    uint32_t    Tier3_PersonaCacheTtlSeconds   = 600;
+    // Built-in suffix appended when Tier3_SystemPromptSuffix is empty.
+    // Initialized from kDefaultTier3SystemPromptSuffix in LoadLlmAgentConfig.
+    std::string Tier3_BuiltInSystemPromptSuffix;
 };
 
 extern const char* const kDefaultSystemPrompt;
 extern const char* const kDefaultTier2SystemPrompt;
+extern const char* const kDefaultTier3SystemPromptSuffix;
 
 LlmApplyMode ParseApplyMode(const std::string& s);
 
@@ -71,6 +84,15 @@ LlmAgentConfig LoadLlmAgentConfig(const Source& src) {
     cfg.Tier2_MaxToolsPerResponse  = src.template Get<uint32_t>   ("AiPlayerbot.LlmAgent.Tier2.MaxToolsPerResponse",  uint32_t{3});
     cfg.Tier2_WhisperWindowSeconds = src.template Get<uint32_t>   ("AiPlayerbot.LlmAgent.Tier2.WhisperWindowSeconds", uint32_t{120});
     cfg.Tier2_SystemPrompt         = src.template Get<std::string>("AiPlayerbot.LlmAgent.Tier2.SystemPrompt",         std::string{kDefaultTier2SystemPrompt});
+
+    cfg.Tier3_Enabled                = src.template Get<bool>       ("AiPlayerbot.LlmAgent.Tier3.Enabled",                true);
+    cfg.Tier3_CooldownMs             = src.template Get<uint32_t>   ("AiPlayerbot.LlmAgent.Tier3.CooldownMs",             uint32_t{5000});
+    cfg.Tier3_DialogueHistorySize    = src.template Get<uint32_t>   ("AiPlayerbot.LlmAgent.Tier3.DialogueHistorySize",    uint32_t{6});
+    cfg.Tier3_WhisperWindowSeconds   = src.template Get<uint32_t>   ("AiPlayerbot.LlmAgent.Tier3.WhisperWindowSeconds",   uint32_t{600});
+    cfg.Tier3_MaxUtteranceChars      = src.template Get<uint32_t>   ("AiPlayerbot.LlmAgent.Tier3.MaxUtteranceChars",      uint32_t{200});
+    cfg.Tier3_SystemPromptSuffix     = src.template Get<std::string>("AiPlayerbot.LlmAgent.Tier3.SystemPromptSuffix",     std::string{});
+    cfg.Tier3_PersonaCacheTtlSeconds = src.template Get<uint32_t>   ("AiPlayerbot.LlmAgent.Tier3.PersonaCacheTtlSeconds", uint32_t{600});
+    cfg.Tier3_BuiltInSystemPromptSuffix = std::string{kDefaultTier3SystemPromptSuffix};
     return cfg;
 }
 

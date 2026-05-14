@@ -155,3 +155,36 @@ TEST_CASE("LlmAgentConfig Tier2 overrides applied") {
     CHECK(cfg.Tier2_WhisperWindowSeconds == 300u);
     CHECK(cfg.Tier2_SystemPrompt == "custom");
 }
+
+TEST_CASE("LlmAgentConfig Tier3 defaults") {
+    StubConfigSource src;
+    LlmAgentConfig cfg = LoadLlmAgentConfig(src);
+    CHECK(cfg.Tier3_Enabled == true);
+    CHECK(cfg.Tier3_CooldownMs == 5000u);
+    CHECK(cfg.Tier3_DialogueHistorySize == 6u);
+    CHECK(cfg.Tier3_WhisperWindowSeconds == 600u);
+    CHECK(cfg.Tier3_MaxUtteranceChars == 200u);
+    CHECK(cfg.Tier3_SystemPromptSuffix.empty());
+    CHECK(cfg.Tier3_PersonaCacheTtlSeconds == 600u);
+    CHECK(!cfg.Tier3_BuiltInSystemPromptSuffix.empty());
+}
+
+TEST_CASE("LlmAgentConfig Tier3 overrides applied") {
+    StubConfigSource src;
+    src.values["AiPlayerbot.LlmAgent.Tier3.Enabled"] = "0";
+    src.values["AiPlayerbot.LlmAgent.Tier3.CooldownMs"] = "1500";
+    src.values["AiPlayerbot.LlmAgent.Tier3.DialogueHistorySize"] = "10";
+    src.values["AiPlayerbot.LlmAgent.Tier3.WhisperWindowSeconds"] = "300";
+    src.values["AiPlayerbot.LlmAgent.Tier3.MaxUtteranceChars"] = "120";
+    src.values["AiPlayerbot.LlmAgent.Tier3.SystemPromptSuffix"] = "custom suffix";
+    src.values["AiPlayerbot.LlmAgent.Tier3.PersonaCacheTtlSeconds"] = "60";
+
+    LlmAgentConfig cfg = LoadLlmAgentConfig(src);
+    CHECK(cfg.Tier3_Enabled == false);
+    CHECK(cfg.Tier3_CooldownMs == 1500u);
+    CHECK(cfg.Tier3_DialogueHistorySize == 10u);
+    CHECK(cfg.Tier3_WhisperWindowSeconds == 300u);
+    CHECK(cfg.Tier3_MaxUtteranceChars == 120u);
+    CHECK(cfg.Tier3_SystemPromptSuffix == "custom suffix");
+    CHECK(cfg.Tier3_PersonaCacheTtlSeconds == 60u);
+}
