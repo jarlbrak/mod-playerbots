@@ -1420,7 +1420,7 @@ WorldPosition NewRpgBaseAction::SelectFarmSpawnPos(const std::vector<uint32>& cr
 
     if (!goEntries.empty())
     {
-        auto const& gspawns = sObjectMgr->GetAllGameObjectData();
+        auto const& gspawns = sObjectMgr->GetAllGOData();
         for (auto const& kv : gspawns)
         {
             GameObjectData const& data = kv.second;
