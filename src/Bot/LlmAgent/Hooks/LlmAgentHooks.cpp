@@ -7,6 +7,7 @@
 #include "DBCStores.h"
 #endif
 
+#include <ctime>
 #include <sstream>
 
 namespace {
@@ -60,6 +61,9 @@ void OnWhisperReceived(Player* bot, Player* sender, const std::string& text) {
         mgr.MemoryClient().Remember(
             bot_guid, txt.str(), entities, /*salience*/ 0.7, relations);
     }
+    mgr.Interactions().PushWhisper(
+        bot_guid, sender->GetName(), sender->GetGUID().GetRawValue(),
+        truncate_whisper(text), static_cast<int64_t>(time(nullptr)));
 #endif
     (void)bot; (void)sender; (void)text;  // silence unused-param in unit-test build
 }
@@ -86,6 +90,35 @@ void OnKill(Player* bot, const std::string& victim_name) {
     }
 #endif
     (void)bot; (void)victim_name;
+}
+
+void OnPartyInviteReceived(Player* bot, Player* inviter) {
+#ifndef LLMAGENT_UNIT_TESTS
+    if (!bot || !inviter) return;
+    if (sPlayerbotsMgr.GetPlayerbotAI(inviter) != nullptr) return;  // bot-to-bot
+    auto& mgr = LlmAgentManager::Instance();
+    if (!mgr.Enabled()) return;
+    const uint64_t bot_guid = bot->GetGUID().GetRawValue();
+    if (mgr.Config().SocialOptIn) mgr.Selector().OptInBot(bot_guid);
+    mgr.Interactions().PushInvite(
+        bot_guid, inviter->GetName(), inviter->GetGUID().GetRawValue(),
+        static_cast<int64_t>(time(nullptr)));
+#endif
+    (void)bot; (void)inviter;
+}
+
+void OnGroupJoined(Player* bot, Player* leader) {
+#ifndef LLMAGENT_UNIT_TESTS
+    if (!bot || !leader) return;
+    auto& mgr = LlmAgentManager::Instance();
+    if (!mgr.Enabled()) return;
+    mgr.Interactions().PushJoin(
+        bot->GetGUID().GetRawValue(),
+        leader->GetName(),
+        leader->GetGUID().GetRawValue(),
+        static_cast<int64_t>(time(nullptr)));
+#endif
+    (void)bot; (void)leader;
 }
 
 }  // namespace LlmAgentHooks

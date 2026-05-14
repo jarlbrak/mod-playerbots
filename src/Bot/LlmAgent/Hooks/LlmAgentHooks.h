@@ -10,6 +10,8 @@ namespace LlmAgentHooks {
 
 void OnWhisperReceived(Player* bot, Player* sender, const std::string& text);
 void OnKill(Player* bot, const std::string& victim_name);
+void OnPartyInviteReceived(Player* bot, Player* inviter);
+void OnGroupJoined(Player* bot, Player* leader);
 
 }  // namespace LlmAgentHooks
 

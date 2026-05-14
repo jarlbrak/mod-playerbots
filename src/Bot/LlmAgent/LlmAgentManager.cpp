@@ -94,6 +94,7 @@ void LlmAgentManager::Shutdown() {
     selector_.Clear();
     cooldowns_.Clear();
     events_.ClearAll();
+    interactions_.ClearAll();
     if (jsonl_.is_open()) jsonl_.close();
 }
 
