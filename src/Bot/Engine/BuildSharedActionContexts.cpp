@@ -21,7 +21,7 @@
 #include "Ai/Dungeon/TbcDungeonActionContext.h"
 #include "Ai/Dungeon/WotlkDungeonActionContext.h"
 #include "Bot/LlmAgent/Context/LlmAgentActionContext.h"
-#include "Bot/LlmAgent/Context/LlmAgentTier2ActionContext.h"
+#include "Bot/LlmAgent/Context/LlmAgentTier3ActionContext.h"
 
 void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Action>& actionContexts)
 {
@@ -61,5 +61,5 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new WotlkDungeonPoSActionContext());
     actionContexts.Add(new WotlkDungeonToCActionContext());
     actionContexts.Add(new LlmAgentActionContext());
-    actionContexts.Add(new LlmAgentTier2ActionContext());
+    actionContexts.Add(new LlmAgentTier3ActionContext());
 }

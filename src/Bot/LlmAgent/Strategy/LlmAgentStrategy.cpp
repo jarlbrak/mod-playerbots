@@ -13,8 +13,8 @@ void LlmAgentStrategy::InitTriggers(std::vector<TriggerNode*>& triggers) {
     );
     triggers.push_back(
         new TriggerNode(
-            "llm interact",
-            {NextAction("llm interact", 16.0f)}   // > T1's 15.0f so T2 outranks T1 when a human is engaged
+            "llm chat",
+            {NextAction("llm chat", 16.0f)}
         )
     );
 }
