@@ -30,6 +30,12 @@ class LlmCounters {
         uint64_t tool_no_action = 0;
         uint64_t tool_truncated = 0;
         uint64_t tool_schema_error = 0;
+
+        // Phase 5: T3 chat brain.
+        std::unordered_map<std::string, uint64_t> chat_envelope_parsed;  // "ok" | "schema_error" | "missing_utterance"
+        std::unordered_map<std::string, uint64_t> chat_event_kind;       // "whisper" | "invite" | "join"
+        uint64_t chat_utterances_queued = 0;
+        uint64_t chat_sender_offline    = 0;
     };
 
     void IncEnqueued();
@@ -49,6 +55,11 @@ class LlmCounters {
     void IncToolNoAction();
     void IncToolTruncated();
     void IncToolSchemaError();
+
+    void IncChatEnvelopeParsed(const std::string& status);
+    void IncChatEventKind(const std::string& kind);
+    void IncChatUtterancesQueued();
+    void IncChatSenderOffline();
 
     Snapshot_t Snapshot() const;
     void DumpToLog() const;
@@ -78,6 +89,12 @@ class LlmCounters {
     std::atomic<uint64_t>                          tool_no_action_{0};
     std::atomic<uint64_t>                          tool_truncated_{0};
     std::atomic<uint64_t>                          tool_schema_error_{0};
+
+    mutable std::mutex                             chat_mu_;
+    std::unordered_map<std::string, uint64_t>      chat_envelope_parsed_;
+    std::unordered_map<std::string, uint64_t>      chat_event_kind_;
+    std::atomic<uint64_t>                          chat_utterances_queued_{0};
+    std::atomic<uint64_t>                          chat_sender_offline_{0};
 };
 
 #endif

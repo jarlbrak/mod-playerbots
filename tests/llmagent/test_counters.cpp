@@ -115,3 +115,52 @@ TEST_CASE("LlmCounters tool counters thread-safe under contention") {
     CHECK(s.tool_received["set_goal"] == N * PER);
     CHECK(s.tool_applied["set_goal"] == N * PER);
 }
+
+TEST_CASE("LlmCounters chat counters increment per status + event_kind") {
+    LlmCounters c;
+    c.IncChatEnvelopeParsed("ok");
+    c.IncChatEnvelopeParsed("schema_error");
+    c.IncChatEnvelopeParsed("ok");
+    c.IncChatUtterancesQueued();
+    c.IncChatEventKind("whisper");
+    c.IncChatEventKind("invite");
+    c.IncChatEventKind("whisper");
+    c.IncChatSenderOffline();
+
+    auto s = c.Snapshot();
+    CHECK(s.chat_envelope_parsed["ok"] == 2);
+    CHECK(s.chat_envelope_parsed["schema_error"] == 1);
+    CHECK(s.chat_utterances_queued == 1);
+    CHECK(s.chat_event_kind["whisper"] == 2);
+    CHECK(s.chat_event_kind["invite"] == 1);
+    CHECK(s.chat_sender_offline == 1);
+}
+
+TEST_CASE("LlmCounters chat counters thread-safe") {
+    LlmCounters c;
+    constexpr int N = 4;
+    constexpr int PER = 500;
+    std::vector<std::thread> threads;
+    for (int t = 0; t < N; ++t)
+        threads.emplace_back([&]{
+            for (int i = 0; i < PER; ++i) {
+                c.IncChatEnvelopeParsed("ok");
+                c.IncChatUtterancesQueued();
+                c.IncChatEventKind("whisper");
+            }
+        });
+    for (auto& th : threads) th.join();
+    auto s = c.Snapshot();
+    CHECK(s.chat_envelope_parsed["ok"] == N * PER);
+    CHECK(s.chat_utterances_queued == N * PER);
+    CHECK(s.chat_event_kind["whisper"] == N * PER);
+}
+
+TEST_CASE("LlmCounters chat Snapshot includes empty map when nothing set") {
+    LlmCounters c;
+    auto s = c.Snapshot();
+    CHECK(s.chat_envelope_parsed.empty());
+    CHECK(s.chat_event_kind.empty());
+    CHECK(s.chat_utterances_queued == 0);
+    CHECK(s.chat_sender_offline == 0);
+}

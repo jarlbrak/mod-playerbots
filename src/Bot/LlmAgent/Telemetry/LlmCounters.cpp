@@ -56,6 +56,13 @@ LlmCounters::Snapshot_t LlmCounters::Snapshot() const {
     s.tool_no_action = tool_no_action_.load(std::memory_order_relaxed);
     s.tool_truncated = tool_truncated_.load(std::memory_order_relaxed);
     s.tool_schema_error = tool_schema_error_.load(std::memory_order_relaxed);
+    {
+        std::lock_guard<std::mutex> g(chat_mu_);
+        s.chat_envelope_parsed = chat_envelope_parsed_;
+        s.chat_event_kind = chat_event_kind_;
+    }
+    s.chat_utterances_queued = chat_utterances_queued_.load(std::memory_order_relaxed);
+    s.chat_sender_offline    = chat_sender_offline_.load(std::memory_order_relaxed);
     return s;
 }
 
@@ -87,6 +94,12 @@ void LlmCounters::DumpToLog() const {
     for (const auto& [k, v] : s.tool_applied) {
         out << " tool_applied[" << k << "]=" << v;
     }
+    out << " chat_utterances_queued=" << s.chat_utterances_queued
+        << " chat_sender_offline="    << s.chat_sender_offline;
+    for (const auto& [k, v] : s.chat_envelope_parsed)
+        out << " chat_envelope[" << k << "]=" << v;
+    for (const auto& [k, v] : s.chat_event_kind)
+        out << " chat_event_kind[" << k << "]=" << v;
 #ifndef LLMAGENT_UNIT_TESTS
     LOG_INFO("playerbots", "{}", out.str());
 #endif
@@ -111,3 +124,18 @@ void LlmCounters::IncToolThrew(const std::string& name) {
 void LlmCounters::IncToolNoAction()    { tool_no_action_.fetch_add(1, std::memory_order_relaxed); }
 void LlmCounters::IncToolTruncated()   { tool_truncated_.fetch_add(1, std::memory_order_relaxed); }
 void LlmCounters::IncToolSchemaError() { tool_schema_error_.fetch_add(1, std::memory_order_relaxed); }
+
+void LlmCounters::IncChatEnvelopeParsed(const std::string& status) {
+    std::lock_guard<std::mutex> g(chat_mu_);
+    ++chat_envelope_parsed_[status];
+}
+void LlmCounters::IncChatEventKind(const std::string& kind) {
+    std::lock_guard<std::mutex> g(chat_mu_);
+    ++chat_event_kind_[kind];
+}
+void LlmCounters::IncChatUtterancesQueued() {
+    chat_utterances_queued_.fetch_add(1, std::memory_order_relaxed);
+}
+void LlmCounters::IncChatSenderOffline() {
+    chat_sender_offline_.fetch_add(1, std::memory_order_relaxed);
+}
