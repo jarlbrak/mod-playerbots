@@ -2548,3 +2548,39 @@ AiPlayerbot.LlmAgent.Tier2.WhisperWindowSeconds = 120
 
 # Override the default T2 system prompt (leave empty to use the built-in).
 AiPlayerbot.LlmAgent.Tier2.SystemPrompt = ""
+
+####################################################################################################
+# LLM AGENT (Phase 5 — T3 chat brain)
+#
+# T3 fires when a human whispers, invites, or joins-group-with an LLM-enabled
+# bot. One LLM call returns {utterance, side_effects}: the bot says something
+# in-character AND emits 0..N tool calls (accept_party_invite, set_goal,
+# memory.remember, etc.) so it doesn't say "I'll come" then sit idle.
+# Replaces Tier 2 on these three events — the Tier2 keys above are inert
+# unless Tier3.Enabled = 0.
+
+# Default: 1 (enabled when LlmAgent.Enabled=1)
+AiPlayerbot.LlmAgent.Tier3.Enabled = 1
+
+# Per-bot cooldown between T3 fires (ms). Short so conversation flows.
+# Default: 5000 (5 s)
+AiPlayerbot.LlmAgent.Tier3.CooldownMs = 5000
+
+# Last N whispers per (bot, sender) pair kept in memory for dialogue context.
+# Default: 6
+AiPlayerbot.LlmAgent.Tier3.DialogueHistorySize = 6
+
+# Whispers older than this drop from the dialogue history.
+# Default: 600 (10 min)
+AiPlayerbot.LlmAgent.Tier3.WhisperWindowSeconds = 600
+
+# Cap on the model's utterance length (chars). The schema enforces this server-side.
+# Default: 200
+AiPlayerbot.LlmAgent.Tier3.MaxUtteranceChars = 200
+
+# Override the default T3 system-prompt suffix (leave empty to use built-in).
+AiPlayerbot.LlmAgent.Tier3.SystemPromptSuffix = ""
+
+# In-process persona cache TTL (s). Bigger TTL = fewer sidecar hits.
+# Default: 600 (10 min)
+AiPlayerbot.LlmAgent.Tier3.PersonaCacheTtlSeconds = 600
