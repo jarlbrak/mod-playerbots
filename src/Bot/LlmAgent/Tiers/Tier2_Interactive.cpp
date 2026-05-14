@@ -43,15 +43,23 @@ std::string BuildT2RequestBody(PlayerbotAI* botAI) {
     const auto& cfg = mgr.Config();
     nlohmann::json digest = BuildT2Digest(botAI);
 
+    // Trim fields not needed for social-interaction decisions to keep the
+    // prompt under the llama-server per-slot context window (n_ctx / --parallel).
+    digest.erase("quest_log");                           // ~50-150 tokens saved
+    if (digest.contains("location") && digest["location"].contains("position"))
+        digest["location"].erase("position");            // ~8 tokens saved
+    if (digest.contains("social") && digest["social"].contains("recent_whispers"))
+        digest["social"].erase("recent_whispers");       // duplicated in interaction_context
+
     nlohmann::json body;
     body["model"]    = cfg.Model;
     body["messages"] = nlohmann::json::array();
     body["messages"].push_back({{"role", "system"}, {"content", cfg.Tier2_SystemPrompt}});
     body["messages"].push_back({{"role", "user"},   {"content", digest.dump()}});
-    body["tools"]       = nlohmann::json::parse(kToolsJsonSchema);
+    body["tools"]       = nlohmann::json::parse(kT2ToolsJsonSchema);
     body["tool_choice"] = "auto";
     body["temperature"] = 0.5;
-    body["max_tokens"]  = 512;
+    body["max_tokens"]  = 256;
     return body.dump();
 }
 

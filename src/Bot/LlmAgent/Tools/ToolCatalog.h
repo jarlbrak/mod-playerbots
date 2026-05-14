@@ -29,6 +29,10 @@ using ParsedToolCall = std::variant<
 
 extern const char* const kToolsJsonSchema;
 
+// Compact subset for Tier-2 social interactions (fits within a 1024-token slot).
+// Omits quest/vendor tools; keeps accept_party_invite, leave_party, set_goal, memory.remember.
+extern const char* const kT2ToolsJsonSchema;
+
 std::variant<std::vector<ParsedToolCall>, ParseError>
 ParseToolCalls(const std::string& raw_json);
 

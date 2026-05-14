@@ -122,6 +122,41 @@ const char* const kToolsJsonSchema = R"([
           "properties":{"src":{"type":"string"},"rel":{"type":"string"},"dst":{"type":"string"}}}}}}}}
 ])";
 
+// Compact schema for Tier-2 (social-only): accept_party_invite, leave_party,
+// set_goal, memory.remember.  Omits accept_quest, turn_in_quest, vendor_junk
+// to keep prompt under the llama-server per-slot context window.
+const char* const kT2ToolsJsonSchema = R"([
+  {"type":"function","function":{
+    "name":"accept_party_invite",
+    "description":"Accept a pending party invite.",
+    "parameters":{"type":"object","required":["from"],
+      "properties":{"from":{"type":"string"}}}}},
+  {"type":"function","function":{
+    "name":"leave_party",
+    "description":"Leave the current party.",
+    "parameters":{"type":"object","required":[],"properties":{}}}},
+  {"type":"function","function":{
+    "name":"set_goal",
+    "description":"Change bot goal.",
+    "parameters":{"type":"object","required":["goal","params","reasoning","ttl_minutes"],
+      "properties":{
+        "goal":{"type":"string","enum":["idle","go_grind","go_camp","wander_npc","wander_random","do_quest","travel_flight","rest","outdoor_pvp"]},
+        "params":{"type":"object"},
+        "reasoning":{"type":"string"},
+        "ttl_minutes":{"type":"integer","minimum":1,"maximum":1440}}}}},
+  {"type":"function","function":{
+    "name":"memory.remember",
+    "description":"Store a memory.",
+    "parameters":{"type":"object","required":["text","entities","salience"],
+      "properties":{
+        "text":{"type":"string"},
+        "entities":{"type":"array","items":{"type":"string"}},
+        "salience":{"type":"number"},
+        "relations":{"type":"array","items":{"type":"object",
+          "required":["src","rel","dst"],
+          "properties":{"src":{"type":"string"},"rel":{"type":"string"},"dst":{"type":"string"}}}}}}}}
+])";
+
 std::variant<std::vector<ParsedToolCall>, ParseError>
 ParseToolCalls(const std::string& raw_json) {
     nlohmann::json j;
