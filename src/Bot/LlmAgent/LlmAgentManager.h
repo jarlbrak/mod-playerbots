@@ -31,6 +31,7 @@ struct LlmRequest {
     std::string body_json;        // OpenAI-shaped POST body
     nlohmann::json digest_json;   // kept for JSONL record
     std::chrono::steady_clock::time_point ts_enqueued;
+    uint32_t tier = 1;   // 1 = T1 (replan), 2 = T2 (interactive)
 };
 
 struct LlmResult {
@@ -43,6 +44,7 @@ struct LlmResult {
     uint64_t queue_wait_ms = 0;
     uint64_t inference_ms = 0;
     uint64_t total_latency_ms = 0;
+    uint32_t tier = 1;   // 1 = T1 (replan), 2 = T2 (interactive)
 };
 
 class LlmAgentManager {
@@ -67,13 +69,13 @@ class LlmAgentManager {
     LlmCounters&           Counters()        { return counters_; }
     MemoryHttpClient&      MemoryClient()    { return *memory_client_; }
     LlmApplyMode        ApplyMode() const { return cfg_.ApplyMode; }
-    bool IsInFlight(uint64_t bot_guid) const;
-    bool HasPendingResults(uint64_t bot_guid) const;
+    bool IsInFlight(uint64_t bot_guid, uint32_t tier = 1) const;
+    bool HasPendingResults(uint64_t bot_guid, uint32_t tier = 1) const;
 
-    // Returns false if the bot already has a request in flight.
+    // Returns false if the bot already has a request in flight for the given tier.
     bool Enqueue(LlmRequest request);
 
-    std::vector<LlmResult> DrainResults(uint64_t bot_guid);
+    std::vector<LlmResult> DrainResults(uint64_t bot_guid, uint32_t tier = 1);
 
   private:
     void WorkerLoop();
@@ -95,10 +97,11 @@ class LlmAgentManager {
     std::deque<LlmRequest>                        queue_;
 
     mutable std::mutex                            inflight_mu_;
-    std::unordered_set<uint64_t>                  inflight_;
+    std::unordered_map<uint64_t, std::unordered_set<uint32_t>>   inflight_;  // bot_guid → tiers in flight
 
     mutable std::mutex                            results_mu_;
-    std::unordered_map<uint64_t, std::stack<LlmResult>> results_;
+    std::unordered_map<uint64_t,
+                       std::unordered_map<uint32_t, std::stack<LlmResult>>>  results_;  // bot_guid → (tier → stack)
 
     std::mutex                                    jsonl_mu_;
     std::ofstream                                 jsonl_;

@@ -98,22 +98,26 @@ void LlmAgentManager::Shutdown() {
     if (jsonl_.is_open()) jsonl_.close();
 }
 
-bool LlmAgentManager::IsInFlight(uint64_t bot_guid) const {
+bool LlmAgentManager::IsInFlight(uint64_t bot_guid, uint32_t tier) const {
     std::lock_guard<std::mutex> g(inflight_mu_);
-    return inflight_.count(bot_guid) > 0;
+    auto it = inflight_.find(bot_guid);
+    return it != inflight_.end() && it->second.count(tier) > 0;
 }
 
-bool LlmAgentManager::HasPendingResults(uint64_t bot_guid) const {
+bool LlmAgentManager::HasPendingResults(uint64_t bot_guid, uint32_t tier) const {
     std::lock_guard<std::mutex> g(results_mu_);
     auto it = results_.find(bot_guid);
-    return it != results_.end() && !it->second.empty();
+    if (it == results_.end()) return false;
+    auto it2 = it->second.find(tier);
+    return it2 != it->second.end() && !it2->second.empty();
 }
 
 bool LlmAgentManager::Enqueue(LlmRequest request) {
     {
         std::lock_guard<std::mutex> g(inflight_mu_);
-        if (inflight_.count(request.bot_guid)) return false;
-        inflight_.insert(request.bot_guid);
+        auto& tiers = inflight_[request.bot_guid];
+        if (tiers.count(request.tier)) return false;
+        tiers.insert(request.tier);
     }
     counters_.IncEnqueued();
     request.ts_enqueued = std::chrono::steady_clock::now();
@@ -125,16 +129,19 @@ bool LlmAgentManager::Enqueue(LlmRequest request) {
     return true;
 }
 
-std::vector<LlmResult> LlmAgentManager::DrainResults(uint64_t bot_guid) {
+std::vector<LlmResult> LlmAgentManager::DrainResults(uint64_t bot_guid, uint32_t tier) {
     std::vector<LlmResult> out;
     std::lock_guard<std::mutex> g(results_mu_);
     auto it = results_.find(bot_guid);
     if (it == results_.end()) return out;
-    while (!it->second.empty()) {
-        out.push_back(std::move(it->second.top()));
-        it->second.pop();
+    auto it2 = it->second.find(tier);
+    if (it2 == it->second.end()) return out;
+    while (!it2->second.empty()) {
+        out.push_back(std::move(it2->second.top()));
+        it2->second.pop();
     }
-    results_.erase(it);
+    it->second.erase(it2);
+    if (it->second.empty()) results_.erase(it);
     return out;
 }
 
@@ -219,15 +226,21 @@ void LlmAgentManager::HandleRequest(LlmRequest req) {
 
     AppendJsonl(record.dump());
 
+    // Propagate tier so consumers can filter by it.
+    result.tier = req.tier;
     // Push to result stack.
     {
         std::lock_guard<std::mutex> g(results_mu_);
-        results_[req.bot_guid].push(std::move(result));
+        results_[req.bot_guid][req.tier].push(std::move(result));
     }
     // Clear in-flight.
     {
         std::lock_guard<std::mutex> g(inflight_mu_);
-        inflight_.erase(req.bot_guid);
+        auto it = inflight_.find(req.bot_guid);
+        if (it != inflight_.end()) {
+            it->second.erase(req.tier);
+            if (it->second.empty()) inflight_.erase(it);
+        }
     }
 }
 
