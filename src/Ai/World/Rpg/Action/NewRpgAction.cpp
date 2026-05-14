@@ -111,13 +111,14 @@ bool NewRpgStatusUpdateAction::Execute(Event /*event*/)
         }
         case RPG_DO_QUEST:
         {
+            // P2 drain-area persistence (LocalQuestsRemaining + 30-min hard cap)
+            // was reverted 2026-05-14 after measuring 36/hr vs P1's 63/hr — the
+            // qualitative win on complete-not-turned-in didn't offset the
+            // throughput cost. LocalQuestsRemaining helper is still defined in
+            // NewRpgBaseAction in case a future iteration wants to revisit
+            // with a stricter "is this quest actually reachable" filter.
             NewRpgInfo& info = botAI->rpgInfo;
-            // F4 P2: keep the bot in DO_QUEST as long as the local zone has
-            // unfinished quests or eligible quest givers. Only re-roll when
-            // both are exhausted OR when the hard cap has elapsed.
-            bool localRemaining = LocalQuestsRemaining();
-            bool hardCapped = info.HasStatusPersisted(statusDoQuestDurationMax);
-            if (!localRemaining || hardCapped)
+            if (info.HasStatusPersisted(statusDoQuestDuration))
             {
                 return RandomChangeStatus({RPG_GO_CAMP, RPG_GO_GRIND, RPG_WANDER_RANDOM, RPG_WANDER_NPC,
                                            RPG_DO_QUEST, RPG_TRAVEL_FLIGHT, RPG_REST, RPG_OUTDOOR_PVP});
