@@ -106,9 +106,9 @@ Deploy requires: `sudo podman tag` + `systemctl restart wow-worldserver` (needs 
 
 ## Operator state at hand-off
 
-- `AiPlayerbot.LlmAgent.Enabled = 1` on Heimdal — **turn off** before walking away
-- Build in progress (rootless podman, ~34% complete when this was written)
-- To confirm T2 end-to-end: deploy 6629ab3f, inject fresh whispers, watch JSONL for `"tier": 2, "parsed_status": "ok"`
+- `AiPlayerbot.LlmAgent.Enabled = 0` on Heimdal (per standing instruction between phases)
+- `wow-worldserver.service` is `active` and running the pre-fix image
+- To confirm T2 end-to-end: deploy 6629ab3f, flip Enabled back to 1, inject fresh whispers, watch JSONL for `"tier": 2, "parsed_status": "ok"`
 
 ## Next
 
