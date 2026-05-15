@@ -195,6 +195,66 @@ TEST_CASE("LlmAgentManager records transport_error on bad endpoint") {
     mgr.Shutdown();
 }
 
+TEST_CASE("LlmAgentManager Enqueue prioritizes tier-3 ahead of tier-1") {
+    // Phase 5.1: chat (T3) is user-facing; replan (T1) is background.
+    // With 1 worker and a slow stub, T3 should jump in front of any
+    // pending T1 in the queue.
+    StubServer srv;
+    srv.sleep = std::chrono::milliseconds(150);
+    auto tmpdir = std::filesystem::temp_directory_path() / "llmagent_test_prio";
+    std::filesystem::create_directories(tmpdir);
+    auto jsonl = (tmpdir / "out.jsonl").string();
+    if (std::filesystem::exists(jsonl)) std::filesystem::remove(jsonl);
+
+    LlmAgentConfig cfg = test_cfg(srv.base_url(), jsonl);
+    cfg.WorkerThreads = 1;  // serialize dispatch
+    LlmAgentManager mgr;
+    mgr.Start(cfg);
+
+    auto mk = [](uint64_t g, uint32_t tier) {
+        LlmRequest r;
+        r.bot_guid = g;
+        r.bot_name = std::to_string(g);
+        r.body_json = "{}";
+        r.digest_json = nlohmann::json::object();
+        r.tier = tier;
+        return r;
+    };
+
+    // T1 bot=1 enqueued first → worker picks it up immediately (queue empty).
+    REQUIRE(mgr.Enqueue(mk(1, 1)));
+    // Give the worker time to dequeue and start sleeping in the stub.
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+
+    // Now enqueue T1 bot=2, T3 bot=3, T1 bot=4 in that order.
+    // Without priority: queue = [2, 3, 4] → completion order = [1,2,3,4]
+    // With priority (tier-3 jumps to front): queue = [3, 2, 4] → [1,3,2,4]
+    REQUIRE(mgr.Enqueue(mk(2, 1)));
+    REQUIRE(mgr.Enqueue(mk(3, 3)));
+    REQUIRE(mgr.Enqueue(mk(4, 1)));
+
+    // Wait for all 4 to be processed.
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (srv.hit_count.load() < 4 && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    REQUIRE(srv.hit_count.load() == 4);
+    mgr.Shutdown();
+
+    // Read JSONL and extract bot_guids in completion order.
+    std::ifstream f(jsonl);
+    std::vector<uint64_t> order;
+    std::string line;
+    while (std::getline(f, line)) {
+        auto j = nlohmann::json::parse(line);
+        order.push_back(j.at("bot_guid").get<uint64_t>());
+    }
+    REQUIRE(order.size() == 4);
+    CHECK(order[0] == 1);  // T1 bot=1 — already in-flight before others enqueued
+    CHECK(order[1] == 3);  // T3 jumps queue
+    CHECK(order[2] == 2);  // then remaining T1s in FIFO
+    CHECK(order[3] == 4);
+}
+
 TEST_CASE("LlmAgentManager Shutdown is idempotent") {
     LlmAgentManager mgr;
     LlmAgentConfig cfg;

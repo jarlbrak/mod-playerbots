@@ -101,7 +101,10 @@ void LlmCounters::DumpToLog() const {
     for (const auto& [k, v] : s.chat_event_kind)
         out << " chat_event_kind[" << k << "]=" << v;
 #ifndef LLMAGENT_UNIT_TESTS
-    LOG_INFO("playerbots", "{}", out.str());
+    // Was "playerbots" — that channel doesn't route to Server.log on this AC
+    // build (Phase 4 → Phase 5 finding). Use "server.loading" so DumpToLog
+    // output actually surfaces on Shutdown.
+    LOG_INFO("server.loading", "{}", out.str());
 #endif
 }
 

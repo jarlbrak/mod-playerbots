@@ -46,6 +46,8 @@ public:
 
         static ChatCommandTable playerbotsT3CommandTable = {
             {"inject_whisper", HandleT3InjectWhisper, SEC_GAMEMASTER, Console::Yes},
+            {"inject_invite",  HandleT3InjectInvite,  SEC_GAMEMASTER, Console::Yes},
+            {"inject_join",    HandleT3InjectJoin,    SEC_GAMEMASTER, Console::Yes},
         };
 
         static ChatCommandTable playerbotsAccountCommandTable = {
@@ -213,6 +215,72 @@ public:
             WhisperEntry::Incoming,
             text, now);
         handler->PSendSysMessage("T3 whisper injected for %s", bot_name.c_str());
+        return true;
+    }
+
+    static bool HandleT3InjectInvite(ChatHandler* handler, char const* args)
+    {
+        if (!args || !*args)
+        {
+            handler->PSendSysMessage("usage: .playerbots t3 inject_invite <bot_name>");
+            return true;
+        }
+        std::string bot_name(args);
+        Player* bot = ObjectAccessor::FindPlayerByName(bot_name);
+        if (!bot)
+        {
+            handler->PSendSysMessage("bot %s not found", bot_name.c_str());
+            return true;
+        }
+        auto& mgr = LlmAgentManager::Instance();
+        mgr.Selector().OptInBot(bot->GetGUID().GetRawValue());
+
+        std::string from_name = "GM";
+        uint64_t    from_guid = 0;
+        if (handler->GetSession())
+        {
+            from_name = handler->GetSession()->GetPlayerName();
+            if (Player* p = handler->GetSession()->GetPlayer())
+                from_guid = p->GetGUID().GetRawValue();
+        }
+        mgr.Interactions().PushInvite(
+            bot->GetGUID().GetRawValue(),
+            from_name, from_guid,
+            static_cast<int64_t>(time(nullptr)));
+        handler->PSendSysMessage("T3 invite injected for %s (from %s)", bot_name.c_str(), from_name.c_str());
+        return true;
+    }
+
+    static bool HandleT3InjectJoin(ChatHandler* handler, char const* args)
+    {
+        if (!args || !*args)
+        {
+            handler->PSendSysMessage("usage: .playerbots t3 inject_join <bot_name>");
+            return true;
+        }
+        std::string bot_name(args);
+        Player* bot = ObjectAccessor::FindPlayerByName(bot_name);
+        if (!bot)
+        {
+            handler->PSendSysMessage("bot %s not found", bot_name.c_str());
+            return true;
+        }
+        auto& mgr = LlmAgentManager::Instance();
+        mgr.Selector().OptInBot(bot->GetGUID().GetRawValue());
+
+        std::string leader_name = "GM";
+        uint64_t    leader_guid = 0;
+        if (handler->GetSession())
+        {
+            leader_name = handler->GetSession()->GetPlayerName();
+            if (Player* p = handler->GetSession()->GetPlayer())
+                leader_guid = p->GetGUID().GetRawValue();
+        }
+        mgr.Interactions().PushJoin(
+            bot->GetGUID().GetRawValue(),
+            leader_name, leader_guid,
+            static_cast<int64_t>(time(nullptr)));
+        handler->PSendSysMessage("T3 join injected for %s (leader %s)", bot_name.c_str(), leader_name.c_str());
         return true;
     }
 

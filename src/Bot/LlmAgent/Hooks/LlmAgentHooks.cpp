@@ -62,18 +62,14 @@ void OnWhisperReceived(Player* bot, Player* sender, const std::string& text) {
         mgr.MemoryClient().Remember(
             bot_guid, txt.str(), entities, /*salience*/ 0.7, relations);
     }
-    LOG_INFO("server.loading", "[LlmAgent] OnWhisperReceived: bot_guid={} sender='{}'",
-             bot_guid, sender->GetName());
     mgr.Interactions().PushWhisper(
         bot_guid, sender->GetName(), sender->GetGUID().GetRawValue(),
         truncate_whisper(text), static_cast<int64_t>(time(nullptr)));
-    LOG_INFO("server.loading", "[LlmAgent] OnWhisperReceived: PushWhisper done; about to Whispers().Push");
     mgr.Whispers().Push(
         bot_guid, sender->GetGUID().GetRawValue(),
         WhisperEntry::Incoming,
         truncate_whisper(text),
         static_cast<int64_t>(time(nullptr)));
-    LOG_INFO("server.loading", "[LlmAgent] OnWhisperReceived: Whispers().Push done");
 #endif
     (void)bot; (void)sender; (void)text;  // silence unused-param in unit-test build
 }
