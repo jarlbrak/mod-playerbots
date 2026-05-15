@@ -164,6 +164,19 @@ The pipeline that would apply a non-empty `side_effects` (ParseChatEnvelope → 
 
 ## Phase 5.2+ candidates
 
-1. **Counter dump capture during smoke.** `LlmCounters::DumpToLog` now goes to `server.loading` so a graceful shutdown WILL surface counters in Server.log. The Phase 5.1 smoke didn't capture them because the deploy script `rm -f /opt/containers/wow/logs/Server.log` before restart — preserve the prior log next time.
-2. **Verify `accept_party_invite` actually applies game state.** The 4 invite-event records all emitted `accept_party_invite{from:"GM"}` but the smoke doesn't directly inspect bot group membership afterwards. Phase 4 unit tests cover `Validate` + `ApplyToolCall`; need an integration test or a manual GM-console check (`.group list`).
-3. **Real-player demo.** Carrying over from Phase 4 plan.
+### Confirmed working: admin-command smoke path
+The admin-command smoke (`.playerbots t3 inject_{whisper,invite,join}`) is fully working: 8/8 ok records with rule-matched side_effects (Phase 5.1 final). The pipeline from `Interactions().PushX` → `LlmChatTrigger` → `LlmChatAction` → LLM → parse → `ApplyToolCall` is sound.
+
+### Real-player demo blockers (Phase 5.2, 2026-05-15)
+Attempted a real-player demo as TBRACK/Puun (Lv 25 Draenei Mage). **Got 0 T3 records.** Two integration issues surfaced that are independent of Phase 5 code:
+
+1. **Bots auto-AFK blocks whisper hooks.** `mod-playerbots/src/Bot/PlayerbotAI.cpp:1514` toggles the bot to AFK when in "minimal" tick mode. AzerothCore's chat dispatch sends an auto-AFK-reply back to the sender and DROPS the whisper before it reaches `PlayerbotAI::HandleCommand`. Our `OnWhisperReceived` hook never fires for whispers to AFK bots. Workaround for a demo: have the bot follow you first (then it un-AFKs per line 1520-1521). Real fix: bypass the AFK drop for playerbot recipients, OR keep the auto-AFK only for "deep idle" not "social idle".
+
+2. **Bots in a real player's group don't fire T3 trigger.** Invited Wilson into Puun's group successfully (Phase 4's rule-based path auto-accepted). Wilson's `OnPartyInviteReceived` hook should have fired and pushed to `InteractionEventBuffer`, then T3 trigger on Wilson's next tick should have enqueued. **It didn't.** Even an admin-injected invite (`.playerbots t3 inject_invite Wilson`) — which we KNOW works for ungrouped bots (Phase 5.1 smoke 8/8) — produced 0 T3 records once Wilson was in Puun's group. Hypothesis: bot's `currentEngine` switches away from `nonCombatEngine` when grouped with a real player; the `llm chat` trigger lives in `LlmAgentStrategy` attached to `nonCombatEngine` only. Verification + fix is a Phase 5.2 task.
+
+3. **Bot population is mostly grouped.** A `mysql -e "SELECT COUNT(*)... WHERE in_group"` query showed many of the level-25 Alliance bots are already in groups (mod-playerbots clusters them for instance/raid sims). For a clean real-player demo, the bot the user invites must be ungrouped AND outside instances. The Phase 5.2 ungrouped-Alliance bot list at the time of testing: `Twoteaste, Ayleath, Ellolaana, Gwenlu, Kallizz, Malunn, Ilydriel, Erianore, Monadek, Bringin`.
+
+### Other Phase 5.2+ items
+4. **Counter dump capture during smoke.** `LlmCounters::DumpToLog` now goes to `server.loading` ✓ but the deploy script `mv ... .prev` (Phase 5.1) preserves prior Server.log. Counter dump can be inspected on graceful shutdown.
+5. **Verify `accept_party_invite` actually applies game state.** Phase 5.1 smoke had 4 records with `accept_party_invite{from:"GM"}` but didn't inspect `.group list` post-fact. Phase 4 unit tests cover `Validate` + `ApplyToolCall`; an in-game integration check is still pending.
+6. **Remove the temp `OnWhisperReceived fired` LOG_INFO** added during Phase 5.2 debug. It went into the `phase5-1` image (commit pending).

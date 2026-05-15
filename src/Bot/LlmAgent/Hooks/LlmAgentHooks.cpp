@@ -33,6 +33,10 @@ namespace LlmAgentHooks {
 void OnWhisperReceived(Player* bot, Player* sender, const std::string& text) {
 #ifndef LLMAGENT_UNIT_TESTS
     if (!bot || !sender) return;
+    LOG_INFO("server.loading",
+             "[LlmAgent] OnWhisperReceived fired: bot='{}' sender='{}' sender_is_bot={}",
+             bot->GetName(), sender->GetName(),
+             sPlayerbotsMgr.GetPlayerbotAI(sender) != nullptr ? 1 : 0);
     if (sPlayerbotsMgr.GetPlayerbotAI(sender) != nullptr) return;  // bot-to-bot whisper, ignore
 
     auto& mgr = LlmAgentManager::Instance();
