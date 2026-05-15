@@ -88,4 +88,8 @@ TEST_CASE("kT3OutputSchema parses and constrains utterance + side_effects") {
     CHECK(has_sfx);
     CHECK(j["properties"]["utterance"]["maxLength"] == 200);
     CHECK(j["properties"]["side_effects"]["maxItems"] == 3);
+    // Phase 5.1: side_effects must include at least one tool call. The model
+    // was happy to emit text-only responses ignoring the prompt directive;
+    // schema-level minItems forces it to commit to an action.
+    CHECK(j["properties"]["side_effects"]["minItems"] == 1);
 }

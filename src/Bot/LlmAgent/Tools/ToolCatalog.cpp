@@ -201,7 +201,7 @@ const char* const kT3OutputSchema =
     "\"additionalProperties\":false,"
     "\"properties\":{"
       "\"utterance\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":200},"
-      "\"side_effects\":{\"type\":\"array\",\"maxItems\":3,"
+      "\"side_effects\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":3,"
         "\"items\":{\"oneOf\":[" LLM_TOOL_CALL_ONEOF_BODY "]}}}"
     "}";
 
