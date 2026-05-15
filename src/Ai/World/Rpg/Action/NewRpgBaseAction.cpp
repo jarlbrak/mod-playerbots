@@ -1395,7 +1395,11 @@ WorldPosition NewRpgBaseAction::SelectFarmSpawnPos(const std::vector<uint32>& cr
 {
     // Allow ~2000 yards of search — wider than the legacy 500-yard grind
     // picker, because we're committing to a farming run.
-    const float maxDist = 2000.0f;
+    // F4 P3.1 (2026-05-14): tuned 2000 -> 500 after observing quest rate
+    // regression. 2000-yd routing burned too much bot time in transit,
+    // dropping quest_rewarded throughput by ~60% vs P1-only. 500 yd keeps
+    // farming intent (route to nearest mob/node) without long marches.
+    const float maxDist = 500.0f;
     float bestDist = maxDist;
     WorldPosition best{};
 
