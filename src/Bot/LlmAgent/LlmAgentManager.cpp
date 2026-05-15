@@ -66,7 +66,7 @@ void LlmAgentManager::Start(LlmAgentConfig cfg) {
 
     cfg_ = std::move(cfg);
 #ifndef LLMAGENT_UNIT_TESTS
-    LOG_INFO("playerbots",
+    LOG_INFO("server.loading",
              "[LlmAgent] Start: Enabled={} JsonlPath='{}' WorkerThreads={} Tier3.Enabled={} SamplePct={}",
              cfg_.Enabled ? 1 : 0, cfg_.JsonlPath, cfg_.WorkerThreads,
              cfg_.Tier3_Enabled ? 1 : 0, cfg_.SamplePct);
@@ -90,7 +90,7 @@ void LlmAgentManager::Start(LlmAgentConfig cfg) {
 
     if (!cfg_.Enabled) {
 #ifndef LLMAGENT_UNIT_TESTS
-        LOG_INFO("playerbots", "[LlmAgent] Start: skipped — Enabled=0");
+        LOG_INFO("server.loading", "[LlmAgent] Start: skipped — Enabled=0");
 #endif
         return;
     }
@@ -104,7 +104,7 @@ void LlmAgentManager::Start(LlmAgentConfig cfg) {
         }
         jsonl_.open(cfg_.JsonlPath, std::ios::app);
 #ifndef LLMAGENT_UNIT_TESTS
-        LOG_INFO("playerbots", "[LlmAgent] Start: jsonl_open='{}' is_open={}",
+        LOG_INFO("server.loading", "[LlmAgent] Start: jsonl_open='{}' is_open={}",
                  cfg_.JsonlPath, jsonl_.is_open() ? 1 : 0);
 #endif
     }
@@ -114,7 +114,7 @@ void LlmAgentManager::Start(LlmAgentConfig cfg) {
     for (uint32_t i = 0; i < cfg_.WorkerThreads; ++i)
         workers_.emplace_back(&LlmAgentManager::WorkerLoop, this);
 #ifndef LLMAGENT_UNIT_TESTS
-    LOG_INFO("playerbots", "[LlmAgent] Start: ready — workers={}", workers_.size());
+    LOG_INFO("server.loading", "[LlmAgent] Start: ready — workers={}", workers_.size());
 #endif
 }
 

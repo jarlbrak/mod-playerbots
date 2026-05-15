@@ -19,7 +19,7 @@ bool LlmChatTrigger::IsActive() {
     // One-shot log to confirm trigger gets dispatched at all. Remove once stable.
     static std::atomic<bool> first_call{true};
     if (first_call.exchange(false)) {
-        LOG_INFO("playerbots", "[LlmAgent] LlmChatTrigger::IsActive first dispatch — bot guid={}", guid);
+        LOG_INFO("server.loading", "[LlmAgent] LlmChatTrigger::IsActive first dispatch — bot guid={}", guid);
     }
 
     // Drain side: T3 results waiting.
