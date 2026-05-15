@@ -1,8 +1,10 @@
 #include "Triggers/LlmChatTrigger.h"
 #include "LlmAgentManager.h"
+#include "Log.h"
 #include "PlayerbotAI.h"
 #include "Player.h"
 
+#include <atomic>
 #include <ctime>
 
 bool LlmChatTrigger::IsActive() {
@@ -13,6 +15,12 @@ bool LlmChatTrigger::IsActive() {
     Player* bot = botAI->GetBot();
     if (!bot) return false;
     const uint64_t guid = bot->GetGUID().GetRawValue();
+
+    // One-shot log to confirm trigger gets dispatched at all. Remove once stable.
+    static std::atomic<bool> first_call{true};
+    if (first_call.exchange(false)) {
+        LOG_INFO("playerbots", "[LlmAgent] LlmChatTrigger::IsActive first dispatch — bot guid={}", guid);
+    }
 
     // Drain side: T3 results waiting.
     if (mgr.HasPendingResults(guid, /*tier*/3)) return true;

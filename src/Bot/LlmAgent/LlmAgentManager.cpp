@@ -2,6 +2,10 @@
 #include "Client/LlmHttpClient.h"
 #include "Schemas/Goal.h"
 
+#ifndef LLMAGENT_UNIT_TESTS
+#include "Log.h"
+#endif
+
 #include <chrono>
 #include <ctime>
 #include <filesystem>
@@ -61,6 +65,12 @@ void LlmAgentManager::Start(LlmAgentConfig cfg) {
     Shutdown();  // safe even if never started
 
     cfg_ = std::move(cfg);
+#ifndef LLMAGENT_UNIT_TESTS
+    LOG_INFO("playerbots",
+             "[LlmAgent] Start: Enabled={} JsonlPath='{}' WorkerThreads={} Tier3.Enabled={} SamplePct={}",
+             cfg_.Enabled ? 1 : 0, cfg_.JsonlPath, cfg_.WorkerThreads,
+             cfg_.Tier3_Enabled ? 1 : 0, cfg_.SamplePct);
+#endif
     // Phase 2 component config
     selector_.Configure(cfg_.SamplePct, cfg_.SocialOptIn);
     events_.Configure(cfg_.EventLogSize);
@@ -78,7 +88,12 @@ void LlmAgentManager::Start(LlmAgentConfig cfg) {
         []{ return static_cast<int64_t>(time(nullptr)); });
 #endif
 
-    if (!cfg_.Enabled) return;
+    if (!cfg_.Enabled) {
+#ifndef LLMAGENT_UNIT_TESTS
+        LOG_INFO("playerbots", "[LlmAgent] Start: skipped — Enabled=0");
+#endif
+        return;
+    }
 
     // Open JSONL (parent dir created if missing).
     if (!cfg_.JsonlPath.empty()) {
@@ -88,12 +103,19 @@ void LlmAgentManager::Start(LlmAgentConfig cfg) {
             std::filesystem::create_directories(p.parent_path(), ec);
         }
         jsonl_.open(cfg_.JsonlPath, std::ios::app);
+#ifndef LLMAGENT_UNIT_TESTS
+        LOG_INFO("playerbots", "[LlmAgent] Start: jsonl_open='{}' is_open={}",
+                 cfg_.JsonlPath, jsonl_.is_open() ? 1 : 0);
+#endif
     }
 
     running_.store(true);
     workers_.reserve(cfg_.WorkerThreads);
     for (uint32_t i = 0; i < cfg_.WorkerThreads; ++i)
         workers_.emplace_back(&LlmAgentManager::WorkerLoop, this);
+#ifndef LLMAGENT_UNIT_TESTS
+    LOG_INFO("playerbots", "[LlmAgent] Start: ready — workers={}", workers_.size());
+#endif
 }
 
 void LlmAgentManager::Shutdown() {
