@@ -55,6 +55,7 @@
 #include "UpdateTime.h"
 #include "Vehicle.h"
 #include "../../../../src/server/scripts/Spells/spell_dk.cpp"
+#include "Bot/LlmAgent/Hooks/LlmAgentHooks.h"
 
 const int SPELL_TITAN_GRIP = 49152;
 
@@ -590,6 +591,7 @@ void PlayerbotAI::HandleCommands()
 std::map<std::string, ChatMsg> chatMap;
 void PlayerbotAI::HandleCommand(uint32 type, const std::string& text, Player& fromPlayer, const uint32 lang)
 {
+    LlmAgentHooks::OnWhisperReceived(bot, &fromPlayer, text);
     if (!bot)
         return;
 
@@ -940,6 +942,15 @@ bool PlayerbotAI::IsAllowedCommand(std::string const text)
 
 void PlayerbotAI::HandleCommand(uint32 type, std::string const text, Player* fromPlayer)
 {
+    // Phase 5.2: mod-playerbots' OnPlayerCanUseChat overloads call THIS
+    // overload (Player* third arg) — NOT the &-reference overload at line 592
+    // where Phase 2 originally wired the LlmAgent hook. Fire OnWhisperReceived
+    // here so real-player → bot whispers + party-chat reach Tier 3. Pass
+    // chat type so the hook can filter addon spam + the action can respond
+    // in the matching channel.
+    if (fromPlayer && bot)
+        LlmAgentHooks::OnWhisperReceived(bot, fromPlayer, text, type);
+
     if (!GetSecurity()->CheckLevelFor(PLAYERBOT_SECURITY_INVITE, type != CHAT_MSG_WHISPER, fromPlayer))
         return;
 
@@ -1509,7 +1520,12 @@ void PlayerbotAI::DoNextAction(bool min)
 
     if (minimal)
     {
-        if (!bot->isAFK() && !bot->InBattleground() && !HasRealPlayerMaster())
+        // Phase 5.2: skip the auto-AFK toggle when LlmAgent is enabled.
+        // AC's chat dispatch drops whispers to AFK players (auto-AFK-reply
+        // intercept), so a bot in auto-AFK mode never reaches HandleCommand
+        // and our LLM whisper hook never fires.
+        if (!bot->isAFK() && !bot->InBattleground() && !HasRealPlayerMaster()
+            && !sPlayerbotAIConfig.llmAgent.Enabled)
             bot->ToggleAFK();
 
         SetNextCheckDelay(sPlayerbotAIConfig.passiveDelay);

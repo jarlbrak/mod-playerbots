@@ -19,6 +19,7 @@
 
 #include "BattlefieldScript.h"
 #include "Channel.h"
+#include "GroupScript.h"
 #include "Config.h"
 #include "DatabaseEnv.h"
 #include "DatabaseLoader.h"
@@ -33,6 +34,8 @@
 #include "PlayerbotCommandScript.h"
 #include "cmath"
 #include "BattleGroundTactics.h"
+#include "Bot/LlmAgent/LlmAgentManager.h"
+#include "Bot/LlmAgent/Hooks/LlmAgentHooks.h"
 
 class PlayerbotsDatabaseScript : public DatabaseScript
 {
@@ -183,6 +186,11 @@ public:
 
     bool OnPlayerCanUseChat(Player* player, uint32 type, uint32 /*lang*/, std::string& msg, Player* receiver) override
     {
+        LOG_INFO("server.loading",
+                 "[LlmAgent] OnPlayerCanUseChat(Player) type={} sender='{}' receiver='{}' has_botAI={}",
+                 type, player ? player->GetName() : "<null>",
+                 receiver ? receiver->GetName() : "<null>",
+                 (receiver && PlayerbotsMgr::instance().GetPlayerbotAI(receiver) != nullptr) ? 1 : 0);
         if (type != CHAT_MSG_WHISPER)
         {
             return true;
@@ -208,21 +216,28 @@ public:
 
     bool OnPlayerCanUseChat(Player* player, uint32 type, uint32 /*lang*/, std::string& msg, Group* group) override
     {
+        int members_total = 0;
+        int members_with_ai = 0;
         for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
         {
             Player* const member = itr->GetSource();
 
             if (member == nullptr)
                 continue;
+            ++members_total;
 
             PlayerbotAI* const botAI = PlayerbotsMgr::instance().GetPlayerbotAI(member);
 
             if (botAI == nullptr)
                 continue;
+            ++members_with_ai;
 
             botAI->HandleCommand(type, msg, player);
         }
-
+        LOG_INFO("server.loading",
+                 "[LlmAgent] OnPlayerCanUseChat(Group) type={} sender='{}' members_total={} members_with_ai={}",
+                 type, player ? player->GetName() : "<null>",
+                 members_total, members_with_ai);
         return true;
     }
 
@@ -381,6 +396,11 @@ public:
         PlayerbotWorldThreadProcessor::instance().Update(diff);
         sRandomPlayerbotMgr.UpdateAI(diff);  // World thread only
     }
+
+    void OnShutdown() override
+    {
+        LlmAgentManager::Instance().Shutdown();
+    }
 };
 
 class PlayerbotsScript : public PlayerbotScript
@@ -408,6 +428,11 @@ public:
 
     void OnPlayerbotCheckKillTask(Player* player, Unit* victim) override
     {
+        if (player && victim) {
+            std::string victim_name = victim->GetName();
+            if (victim_name.empty()) victim_name = "unknown";
+            LlmAgentHooks::OnKill(player, victim_name);
+        }
         if (player)
             GuildTaskMgr::instance().CheckKillTask(player, victim);
     }
@@ -523,6 +548,38 @@ public:
     PlayerbotsBattlefieldScript() : BattlefieldScript("PlayerbotsBattlefieldScript") { }
 };
 
+class PlayerbotsGroupScript : public GroupScript
+{
+public:
+    PlayerbotsGroupScript() : GroupScript("PlayerbotsGroupScript", {
+        GROUPHOOK_ON_ADD_MEMBER,
+        GROUPHOOK_ON_INVITE_MEMBER
+    }) {}
+
+    void OnInviteMember(Group* group, ObjectGuid guid) override
+    {
+        if (!group) return;
+        Player* invitee = ObjectAccessor::FindPlayer(guid);
+        if (!invitee) return;
+        if (PlayerbotsMgr::instance().GetPlayerbotAI(invitee) == nullptr) return;  // only forward for bots
+        Player* inviter = ObjectAccessor::FindPlayer(group->GetLeaderGUID());
+        if (!inviter) return;
+        LlmAgentHooks::OnPartyInviteReceived(invitee, inviter);
+    }
+
+    void OnAddMember(Group* group, ObjectGuid guid) override
+    {
+        if (!group) return;
+        Player* joiner = ObjectAccessor::FindPlayer(guid);
+        if (!joiner) return;
+        if (PlayerbotsMgr::instance().GetPlayerbotAI(joiner) == nullptr) return;
+        Player* leader = ObjectAccessor::FindPlayer(group->GetLeaderGUID());
+        if (!leader) return;
+        if (leader == joiner) return;  // bot is the leader of its own newly-formed group; not a "joined someone else's group" event
+        LlmAgentHooks::OnGroupJoined(joiner, leader);
+    }
+};
+
 void AddPlayerbotsSecureLoginScripts();
 
 void AddSC_TempestKeepBotScripts();
@@ -530,6 +587,7 @@ void AddSC_TempestKeepBotScripts();
 void AddPlayerbotsScripts()
 {
     new PlayerbotsBattlefieldScript();
+    new PlayerbotsGroupScript();
     new PlayerbotsDatabaseScript();
     new PlayerbotsPlayerScript();
     new PlayerbotsMiscScript();

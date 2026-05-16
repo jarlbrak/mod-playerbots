@@ -20,6 +20,8 @@
 #include "Ai/Raid/Icecrown/RaidIccTriggerContext.h"
 #include "Ai/Dungeon/TbcDungeonTriggerContext.h"
 #include "Ai/Dungeon/WotlkDungeonTriggerContext.h"
+#include "Bot/LlmAgent/Context/LlmAgentTriggerContext.h"
+#include "Bot/LlmAgent/Context/LlmAgentTier3TriggerContext.h"
 
 void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Trigger>& triggerContexts)
 {
@@ -58,4 +60,6 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new WotlkDungeonFoSTriggerContext());
     triggerContexts.Add(new WotlkDungeonPoSTriggerContext());
     triggerContexts.Add(new WotlkDungeonToCTriggerContext());
+    triggerContexts.Add(new LlmAgentTriggerContext());
+    triggerContexts.Add(new LlmAgentTier3TriggerContext());
 }

@@ -1,0 +1,16 @@
+[sudo] password for brackin: TIME                           PID  UID  GID SIG     COREFILE EXE                                   SIZE
+Thu 2026-05-14 14:46:10 PDT 228036 1000 1000 SIGSEGV missing  /azerothcore/env/dist/bin/worldserver    -
+Thu 2026-05-14 14:54:40 PDT 475835 1000 1000 SIGSEGV missing  /azerothcore/env/dist/bin/worldserver    -
+Thu 2026-05-14 14:56:26 PDT 478294 1000 1000 SIGSEGV missing  /azerothcore/env/dist/bin/worldserver    -
+Thu 2026-05-14 14:57:59 PDT 482301 1000 1000 SIGSEGV missing  /azerothcore/env/dist/bin/worldserver    -
+Thu 2026-05-14 14:59:11 PDT 484840 1000 1000 SIGSEGV missing  /azerothcore/env/dist/bin/worldserver    -
+Thu 2026-05-14 15:00:55 PDT 486969 1000 1000 SIGSEGV missing  /azerothcore/env/dist/bin/worldserver    -
+Thu 2026-05-14 15:02:27 PDT 490860 1000 1000 SIGSEGV missing  /azerothcore/env/dist/bin/worldserver    -
+Thu 2026-05-14 15:04:09 PDT 494223 1000 1000 SIGSEGV missing  /azerothcore/env/dist/bin/worldserver    -
+Thu 2026-05-14 15:05:58 PDT 497167 1000 1000 SIGSEGV missing  /azerothcore/env/dist/bin/worldserver    -
+Thu 2026-05-14 15:07:51 PDT 500737 1000 1000 SIGSEGV missing  /azerothcore/env/dist/bin/worldserver    -
+Thu 2026-05-14 15:09:28 PDT 503868 1000 1000 SIGSEGV missing  /azerothcore/env/dist/bin/worldserver    -
+Thu 2026-05-14 15:59:48 PDT 585621 1000 1000 SIGSEGV present  /azerothcore/env/dist/bin/worldserver   1G
+Thu 2026-05-14 16:11:24 PDT 616133 1000 1000 SIGSEGV present  /azerothcore/env/dist/bin/worldserver   1G
+Thu 2026-05-14 16:24:36 PDT 638755 1000 1000 SIGSEGV present  /azerothcore/env/dist/bin/worldserver   1G
+Thu 2026-05-14 16:36:00 PDT 656598 1000 1000 SIGSEGV present  /azerothcore/env/dist/bin/worldserver   1G

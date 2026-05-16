@@ -1,0 +1,23 @@
+[Unit]
+Description=llama-server (Vulkan, embedding mode) for memory sidecar
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Image=ghcr.io/ggml-org/llama.cpp:server-vulkan
+PublishPort=0.0.0.0:8081:8081
+Volume=/var/lib/llama-models:/models:Z,ro
+EnvironmentFile=/etc/llama-embed.env
+AddDevice=/dev/dri/renderD128
+GroupAdd=105
+GroupAdd=39
+Exec=--host 0.0.0.0 --port 8081 --model /models/${EMBED_MODEL} --embedding --n-gpu-layers 999 --ctx-size 512
+
+[Service]
+EnvironmentFile=/etc/llama-embed.env
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

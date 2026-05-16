@@ -2,6 +2,7 @@
 #include "StrategyContext.h"
 #include "Ai/Dungeon/DungeonStrategyContext.h"
 #include "Ai/Raid/RaidStrategyContext.h"
+#include "Bot/LlmAgent/Context/LlmAgentStrategyContext.h"
 
 void AiObjectContext::BuildSharedStrategyContexts(SharedNamedObjectContextList<Strategy>& strategyContexts)
 {
@@ -11,4 +12,5 @@ void AiObjectContext::BuildSharedStrategyContexts(SharedNamedObjectContextList<S
     strategyContexts.Add(new QuestStrategyContext());
     strategyContexts.Add(new DungeonStrategyContext());
     strategyContexts.Add(new RaidStrategyContext());
+    strategyContexts.Add(new LlmAgentStrategyContext());
 }

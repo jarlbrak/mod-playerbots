@@ -2432,3 +2432,155 @@ AiPlayerbot.SummonAtInnkeepersEnabled = 1
 # Buffs will be applied on PP, Sindragosa and Lich King
 
 AiPlayerbot.EnableICCBuffs = 1
+
+####################################################################################################
+# LLM AGENT (Phase 1 — plumbing spike)
+#
+# Sends bot state digests to a local llama-server on every Idle transition.
+# When disabled (default), zero LlmAgent code path executes. When enabled,
+# the LLM call happens in parallel with the existing rule-based transition
+# but the LLM's output is NEVER applied — Phase 1 is log-only.
+#
+# All responses are written as JSON Lines to AiPlayerbot.LlmAgent.JsonlPath.
+
+# Default: 0 (disabled)
+AiPlayerbot.LlmAgent.Enabled = 0
+
+# llama-server base URL. POST goes to ${Endpoint}/v1/chat/completions.
+AiPlayerbot.LlmAgent.Endpoint = "http://127.0.0.1:8080"
+
+# Model label sent in the OpenAI-shaped request body.
+AiPlayerbot.LlmAgent.Model = "qwen2.5-7b-instruct-q4_k_m.gguf"
+
+# Worker threads (validated by Phase 0.5: slots=4 is goldilocks).
+AiPlayerbot.LlmAgent.WorkerThreads = 4
+
+# Per-request timeout. p95 measured at 2.7s; default leaves headroom.
+AiPlayerbot.LlmAgent.RequestTimeoutMs = 15000
+
+# Where the JSONL audit log goes (relative to worldserver CWD).
+AiPlayerbot.LlmAgent.JsonlPath = "logs/llm_agent_phase1.jsonl"
+
+# Override the default system prompt (leave empty to use the built-in).
+AiPlayerbot.LlmAgent.SystemPrompt = ""
+
+####################################################################################################
+# LLM AGENT (Phase 2 — validator + apply path)
+#
+# Phase 2 adds the apply path: when the LLM's proposed transition validates,
+# we actually drive NewRpgInfo. Default ApplyMode = "log" preserves Phase 1
+# behavior. Use "shadow" for an intermediate safety mode that records what
+# WOULD have been applied without changing bot behavior. Use "apply" for
+# production.
+
+# ApplyMode: log | shadow | apply
+# Default: log
+AiPlayerbot.LlmAgent.ApplyMode = "log"
+
+# Percentage of bots (selected by GUID hash) that get the LLM path.
+# 0 = no bots LLM-enhanced. 100 = all bots. Combine with SocialOptIn = 1
+# to additionally enable any bot a real player whispers or party-invites.
+# Default: 0
+AiPlayerbot.LlmAgent.SamplePct = 0
+
+# Auto-opt-in bots that real players whisper or invite to group.
+# Default: 1
+AiPlayerbot.LlmAgent.SocialOptIn = 1
+
+# Cap on the LLM's ttl_minutes value when computing apply-side cooldown.
+# Default: 60
+AiPlayerbot.LlmAgent.MaxCooldownMinutes = 60
+
+# Cooldown applied after any non-accepted outcome (transport error,
+# schema error, validator reject, timeout).
+# Default: 300000 (5 minutes)
+AiPlayerbot.LlmAgent.FallbackCooldownMs = 300000
+
+# Ring buffer length for the digest's event_log field. 0 disables.
+# Default: 20
+AiPlayerbot.LlmAgent.EventLogSize = 20
+
+####################################################################################################
+# MEMORY SIDECAR (Phase 3)
+#
+# Per-bot memory service. When the sidecar is unreachable, recalls return
+# empty hints and writes are silently dropped — gameplay is unaffected.
+
+# Sidecar HTTP endpoint.
+# Default: http://127.0.0.1:8090
+AiPlayerbot.MemorySidecar.Endpoint = "http://127.0.0.1:8090"
+
+# Per-request timeout (ms). Tight on purpose so T0 digest build stays snappy.
+# Default: 2000
+AiPlayerbot.MemorySidecar.RequestTimeoutMs = 2000
+
+# Allow kill/whisper hooks to POST to /memory/remember. Set 0 to make memory
+# read-only (useful for A/B between "live data" and "stale corpus").
+# Default: 1
+AiPlayerbot.MemorySidecar.EnableWrites = 1
+
+# Hints per recall_about call.
+# Default: 3
+AiPlayerbot.MemorySidecar.RecallTopK = 3
+
+# Cumulative hint character budget per digest.
+# Default: 1200
+AiPlayerbot.MemorySidecar.HintMaxChars = 1200
+
+####################################################################################################
+# LLM AGENT (Phase 4 — T2 interactive tool-calling)
+#
+# T2 fires when a real player engages with a bot via whisper, party invite,
+# or group join. The bot can emit tool calls — accept_party_invite, set_goal,
+# accept_quest, etc. — which are validated server-side before execution.
+
+# Default: 1 (enabled when LlmAgent.Enabled=1)
+AiPlayerbot.LlmAgent.Tier2.Enabled = 1
+
+# Hard cap on tool calls applied per LLM response (parsed in order, stop on
+# first validation failure except memory.remember which is non-blocking).
+# Default: 3
+AiPlayerbot.LlmAgent.Tier2.MaxToolsPerResponse = 3
+
+# Whispers older than this don't trigger T2.
+# Default: 120 (2 minutes)
+AiPlayerbot.LlmAgent.Tier2.WhisperWindowSeconds = 120
+
+# Override the default T2 system prompt (leave empty to use the built-in).
+AiPlayerbot.LlmAgent.Tier2.SystemPrompt = ""
+
+####################################################################################################
+# LLM AGENT (Phase 5 — T3 chat brain)
+#
+# T3 fires when a human whispers, invites, or joins-group-with an LLM-enabled
+# bot. One LLM call returns {utterance, side_effects}: the bot says something
+# in-character AND emits 0..N tool calls (accept_party_invite, set_goal,
+# memory.remember, etc.) so it doesn't say "I'll come" then sit idle.
+# Replaces Tier 2 on these three events — the Tier2 keys above are inert
+# unless Tier3.Enabled = 0.
+
+# Default: 1 (enabled when LlmAgent.Enabled=1)
+AiPlayerbot.LlmAgent.Tier3.Enabled = 1
+
+# Per-bot cooldown between T3 fires (ms). Short so conversation flows.
+# Default: 5000 (5 s)
+AiPlayerbot.LlmAgent.Tier3.CooldownMs = 5000
+
+# Last N whispers per (bot, sender) pair kept in memory for dialogue context.
+# Default: 6
+AiPlayerbot.LlmAgent.Tier3.DialogueHistorySize = 6
+
+# Whispers older than this drop from the dialogue history.
+# Default: 600 (10 min)
+AiPlayerbot.LlmAgent.Tier3.WhisperWindowSeconds = 600
+
+# Cap on the model's utterance length (chars). The schema enforces this server-side.
+# Default: 200
+AiPlayerbot.LlmAgent.Tier3.MaxUtteranceChars = 200
+
+# Override the default T3 system-prompt suffix (leave empty to use built-in).
+AiPlayerbot.LlmAgent.Tier3.SystemPromptSuffix = ""
+
+# In-process persona cache TTL (s). Bigger TTL = fewer sidecar hits.
+# Default: 600 (10 min)
+AiPlayerbot.LlmAgent.Tier3.PersonaCacheTtlSeconds = 600

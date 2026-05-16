@@ -667,6 +667,14 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
                 }
             }
         }
+
+        // Phase 5.2: attach "llm agent" regardless of grouping. The strategy
+        // contains T1 (replan) + T3 (chat) triggers. T3 must fire when a real
+        // player whispers/invites/groups-with a bot, which means the bot's
+        // strategy set INCLUDING "llm agent" must persist across the
+        // ResetStrategies that AcceptInvitationAction triggers post-invite.
+        if (sPlayerbotAIConfig.llmAgent.Enabled)
+            nonCombatEngine->addStrategy("llm agent", false);
     }
     else
         nonCombatEngine->ChangeStrategy(sPlayerbotAIConfig.nonCombatStrategies);
