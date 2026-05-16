@@ -721,19 +721,18 @@ AiPlayerbot.RandomBotJoinLfg = 1
 # Per-bot "merchant perception" comes from sRandomPlayerbotMgr.GetSellMultiplier
 # (uniform [0.80, 2.50]). A bot with multiplier 0.8 thinks vendor > AH and
 # won't list; a bot with 2.5 lists almost everything. This naturally
-# diversifies AH prices without a learned model.
+# diversifies AH prices and item availability without a learned model.
 #
-# AhProfitMargin: list if estimatedAH >= margin * vendorPrice (default 1.5x).
-# AhHighValueItemThreshold: trigger the AH detour if any inventory item has
-#   estimated AH price >= this many copper (default 50000 = 5 gold).
-# AhBagPressureFreeSlots: also trigger the detour when free slots <= this.
+# AhProfitMargin: list when estimatedAH > margin * vendorPrice. Default 1.0
+#   means "list anything whose per-bot price beats vendor" — cheap items
+#   included. Raise above 1.0 to be more selective.
+# AhBagPressureFreeSlots: trigger the detour when free slots drop to this.
 # AhListingMaxConcurrent: per-bot active-listings cap, prevents flooding.
 #
 AiPlayerbot.AhListingEnabled = 1
-AiPlayerbot.AhProfitMargin = 1.5
+AiPlayerbot.AhProfitMargin = 1.0
 AiPlayerbot.AhListingMaxConcurrent = 5
 AiPlayerbot.AhBagPressureFreeSlots = 4
-AiPlayerbot.AhHighValueItemThreshold = 50000
 
 # Enable/Disable periodic online - offline of randombots to mimic the real-world scenario where not all players are online simultaneously
 # When enabled, randombots are randomly selected to go online or offline periodically from a larger set

@@ -114,7 +114,9 @@ uint32 ListAtAuctionAction::ListItemsAt(Creature* auctioneer)
 
         uint32 const vendorTotal = tpl->SellPrice * item->GetCount();
         uint32 const estimatedAH = (uint32)(vendorTotal * mult);
-        if (estimatedAH < (uint32)(margin * vendorTotal))
+        // List any item where this bot's per-bot price exceeds vendor.
+        // AhProfitMargin (default 1.0) lets operators raise the bar if desired.
+        if (estimatedAH <= (uint32)(margin * vendorTotal))
             return;
 
         uint32 const buyout = estimatedAH;

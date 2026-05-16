@@ -152,7 +152,6 @@ public:
     float ahProfitMargin;
     uint32 ahListingMaxConcurrent;
     uint32 ahBagPressureFreeSlots;
-    uint32 ahHighValueItemThreshold;
 
     // Buff system
     // Min group size to use Greater buffs (Paladin, Mage, Druid). Default: 3

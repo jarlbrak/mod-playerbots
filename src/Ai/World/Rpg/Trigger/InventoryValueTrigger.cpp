@@ -34,7 +34,6 @@ bool InventoryValueTrigger::IsActive()
         return true;
 
     double const mult = sRandomPlayerbotMgr.GetSellMultiplier(bot);
-    uint32 const threshold = sPlayerbotAIConfig.ahHighValueItemThreshold;
 
     auto checkItem = [&](Item* item) -> bool
     {
@@ -46,8 +45,10 @@ bool InventoryValueTrigger::IsActive()
         ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", item->GetEntry());
         if (usage != ITEM_USAGE_AH)
             return false;
-        uint32 est = (uint32)(item->GetCount() * tpl->SellPrice * mult);
-        return est >= threshold;
+        // Trigger if this bot's multiplier makes AH > vendor for this item.
+        uint32 const vendorTotal = tpl->SellPrice * item->GetCount();
+        uint32 const est = (uint32)(vendorTotal * mult);
+        return est > vendorTotal;
     };
 
     for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
