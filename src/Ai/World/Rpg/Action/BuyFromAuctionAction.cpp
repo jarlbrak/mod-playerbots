@@ -7,6 +7,7 @@
 
 #include "AuctionHouseMgr.h"
 #include "DatabaseEnv.h"
+#include "ItemUsageValue.h"
 #include "ObjectMgr.h"
 #include "PlayerbotAIConfig.h"
 #include "Playerbots.h"
@@ -129,6 +130,21 @@ uint32 BuyFromAuctionAction::BuyAtAuctioneer(Creature* auctioneer)
 
         ItemTemplate const* tpl = sObjectMgr->GetItemTemplate(auction->item_template);
         if (!tpl || tpl->SellPrice == 0)
+            continue;
+
+        // Only buy items the bot has a real use for — drives need-driven trade,
+        // not arbitrage-driven churn. The "want" set covers gear upgrades,
+        // quest items, profession materials, consumables, and ammo. We
+        // explicitly skip AH/VENDOR/DISENCHANT/KEEP/NONE etc. so bots don't
+        // buy just to immediately relist or vendor.
+        ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", auction->item_template);
+        bool wanted = (usage == ITEM_USAGE_EQUIP
+                    || usage == ITEM_USAGE_REPLACE
+                    || usage == ITEM_USAGE_QUEST
+                    || usage == ITEM_USAGE_SKILL
+                    || usage == ITEM_USAGE_USE
+                    || usage == ITEM_USAGE_AMMO);
+        if (!wanted)
             continue;
 
         uint32 const willingness = (uint32)(tpl->SellPrice * auction->itemCount * factor);
