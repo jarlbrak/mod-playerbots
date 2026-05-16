@@ -31,21 +31,11 @@ bool ListAtAuctionAction::Execute(Event /*event*/)
     if (!sPlayerbotAIConfig.ahListingEnabled)
         return false;
     if (bot->InBattleground() || (bot->GetMap() && bot->GetMap()->IsDungeon()))
-    {
-        LOG_INFO("playerbots", "ah/p4: skip bot {} in-bg-or-dungeon", bot->GetName());
         return false;
-    }
     if (!bot->IsAlive() || bot->IsInCombat() || bot->GetTransport())
-    {
-        LOG_INFO("playerbots", "ah/p4: skip bot {} dead/combat/transport", bot->GetName());
         return false;
-    }
 
     Creature* auctioneer = FindNearestAuctioneer();
-    LOG_INFO("playerbots", "ah/p4: bot {} entered Execute, map={} pos=({:.0f},{:.0f}) auctioneer={}",
-             bot->GetName(), bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(),
-             auctioneer ? "found" : "null");
-
     if (!auctioneer)
     {
         AhSpot const& spot = (bot->GetTeamId() == TEAM_ALLIANCE) ? kAhSpotAlliance : kAhSpotHorde;
@@ -56,9 +46,7 @@ bool ListAtAuctionAction::Execute(Event /*event*/)
             bool ok = bot->TeleportTo(spot.mapId, spot.x, spot.y, spot.z, spot.o);
             LOG_INFO("playerbots", "ah/p4: teleport bot {} -> map{} spot result={}",
                      bot->GetName(), spot.mapId, ok);
-            return true;
         }
-        LOG_INFO("playerbots", "ah/p4: bot {} at-spot, waiting for npcs cache", bot->GetName());
         return true;
     }
 
@@ -68,12 +56,12 @@ bool ListAtAuctionAction::Execute(Event /*event*/)
             auctioneer->GetPositionX(),
             auctioneer->GetPositionY(),
             auctioneer->GetPositionZ());
-        LOG_INFO("playerbots", "ah/p4: bot {} moving to auctioneer", bot->GetName());
         return true;
     }
 
     uint32 listed = ListItemsAt(auctioneer);
-    LOG_INFO("playerbots", "ah/p4: bot {} listed {} items at AH", bot->GetName(), listed);
+    if (listed > 0)
+        LOG_INFO("playerbots", "ah/p4: bot {} listed {} items at AH", bot->GetName(), listed);
     return listed > 0;
 }
 
