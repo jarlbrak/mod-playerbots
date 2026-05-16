@@ -712,46 +712,39 @@ AiPlayerbot.PreQuests = 0
 AiPlayerbot.RandomBotJoinLfg = 1
 
 #
-# F4 P4 - AH listing sub-behavior. Any bot carrying loot worth more on AH
-# than at a vendor will interrupt its current activity to visit the
-# nearest auctioneer and list items. Listings get bought by mod-playerbots'
-# built-in AHBot buyer logic, closing the economy loop. Bots pay the
-# normal deposit out of pocket so spam self-regulates.
+# F4 P4 - AH listing sub-behavior. Mutual-aid auction house: bots farm,
+# list, and buy items they actually need, all at a flat regulated markup
+# from vendor sell price. No per-bot persona pricing, no arbitrage, no
+# runaway capitalism. Listings flow into the unified Neutral house so
+# Alliance / Horde / Neutral auctioneers all serve the same inventory.
 #
-# Per-bot "merchant perception" comes from sRandomPlayerbotMgr.GetSellMultiplier
-# (uniform [0.80, 2.50]). A bot with multiplier 0.8 thinks vendor > AH and
-# won't list; a bot with 2.5 lists almost everything. This naturally
-# diversifies AH prices and item availability without a learned model.
-#
-# AhProfitMargin: list when estimatedAH > margin * vendorPrice. Default 1.0
-#   means "list anything whose per-bot price beats vendor" — cheap items
-#   included. Raise above 1.0 to be more selective.
+# AhFlatMarkup: every listing priced at exactly markup * vendor sell
+#   price * stack count. Default 1.5x rewards labor without inflating.
 # AhBagPressureFreeSlots: trigger the detour when free slots drop to this.
 # AhListingMaxConcurrent: per-bot active-listings cap, prevents flooding.
 #
 AiPlayerbot.AhListingEnabled = 1
-AiPlayerbot.AhProfitMargin = 1.0
+AiPlayerbot.AhFlatMarkup = 1.5
 AiPlayerbot.AhListingMaxConcurrent = 5
 AiPlayerbot.AhBagPressureFreeSlots = 4
 
 #
 # F4 P4 buyer side — completes the AH economy loop. Bots with idle gold
 # and bag space periodically visit the AH to instant-buyout listings
-# they consider bargains (buyout < willingnessFactor * vendor sell price
-# * stack count). Bought items arrive via standard auction-won mail.
+# they have a real use for (ITEM_USAGE_EQUIP / REPLACE / QUEST / SKILL /
+# USE / AMMO). Bought items arrive via standard auction-won mail.
+#
+# Buyer pays the flat markup. The willingness ceiling reuses
+# AhFlatMarkup so prices match the seller side automatically.
 #
 # AhBuyerMinGold: bot keeps at least this much in pocket; copper units.
 # AhBuyerMinFreeBagSlots: must have at least this many open slots.
 # AhBuyerMaxBuysPerCycle: cap per single action invocation (rate limit).
-# AhBuyerWillingnessFactor: 1.0 = pay up to vendor value, 2.0 = pay up
-#   to 2x vendor — matches the upper end of seller multipliers, ensuring
-#   most listings find a buyer over time.
 #
 AiPlayerbot.AhBuyingEnabled = 1
 AiPlayerbot.AhBuyerMinGold = 10000
 AiPlayerbot.AhBuyerMinFreeBagSlots = 4
 AiPlayerbot.AhBuyerMaxBuysPerCycle = 3
-AiPlayerbot.AhBuyerWillingnessFactor = 2.0
 
 # Enable/Disable periodic online - offline of randombots to mimic the real-world scenario where not all players are online simultaneously
 # When enabled, randombots are randomly selected to go online or offline periodically from a larger set

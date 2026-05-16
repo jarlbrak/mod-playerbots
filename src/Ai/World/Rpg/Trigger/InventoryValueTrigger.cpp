@@ -7,7 +7,6 @@
 
 #include "ItemUsageValue.h"
 #include "PlayerbotAIConfig.h"
-#include "RandomPlayerbotMgr.h"
 #include "Playerbots.h"
 
 bool InventoryValueTrigger::IsActive()
@@ -38,8 +37,9 @@ bool InventoryValueTrigger::IsActive()
     if (freeSlots <= sPlayerbotAIConfig.ahBagPressureFreeSlots)
         return true;
 
-    double const mult = sRandomPlayerbotMgr.GetSellMultiplier(bot);
-
+    // Mutual-aid AH: any AH-eligible item with positive sell price is worth
+    // listing — flat markup means every listing is fair-priced by definition.
+    // No per-bot persona, no merchant role-play, no gaming the market.
     auto checkItem = [&](Item* item) -> bool
     {
         if (!item)
@@ -48,12 +48,7 @@ bool InventoryValueTrigger::IsActive()
         if (!tpl || tpl->SellPrice == 0)
             return false;
         ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", item->GetEntry());
-        if (usage != ITEM_USAGE_AH)
-            return false;
-        // Trigger if this bot's multiplier makes AH > vendor for this item.
-        uint32 const vendorTotal = tpl->SellPrice * item->GetCount();
-        uint32 const est = (uint32)(vendorTotal * mult);
-        return est > vendorTotal;
+        return usage == ITEM_USAGE_AH;
     };
 
     for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)

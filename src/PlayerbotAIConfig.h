@@ -147,9 +147,9 @@ public:
     uint32 disabledWithoutRealPlayerLoginDelay, disabledWithoutRealPlayerLogoutDelay;
     bool randomBotJoinLfg;
 
-    // F4 P4 — AH listing sub-behavior
+    // F4 P4 — AH listing sub-behavior (mutual-aid pricing, not capitalist)
     bool ahListingEnabled;
-    float ahProfitMargin;
+    float ahFlatMarkup;               // every listing priced at exactly markup * vendorSellPrice
     uint32 ahListingMaxConcurrent;
     uint32 ahBagPressureFreeSlots;
 
@@ -158,7 +158,6 @@ public:
     uint32 ahBuyerMinGold;            // floor pocket money before buying (copper)
     uint32 ahBuyerMinFreeBagSlots;    // must have room to carry purchases
     uint32 ahBuyerMaxBuysPerCycle;    // per action invocation cap
-    float  ahBuyerWillingnessFactor;  // buy if buyout < factor * vendorSellPrice * count
 
     // Buff system
     // Min group size to use Greater buffs (Paladin, Mage, Druid). Default: 3

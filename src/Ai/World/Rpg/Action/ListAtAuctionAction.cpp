@@ -12,7 +12,6 @@
 #include "ObjectMgr.h"
 #include "PlayerbotAIConfig.h"
 #include "Playerbots.h"
-#include "RandomPlayerbotMgr.h"
 #include "World.h"
 
 // Faction-default auction-house spot. Coords sit right next to the auctioneer trio in each city.
@@ -94,12 +93,14 @@ Creature* ListAtAuctionAction::FindNearestAuctioneer()
 
 uint32 ListAtAuctionAction::ListItemsAt(Creature* auctioneer)
 {
+    // Unified single AH — Alliance, Horde, and Neutral auctioneers all post into
+    // and read from the same Neutral house. No faction split, no neutral surcharge.
     AuctionHouseEntry const* ahEntry =
-        AuctionHouseMgr::GetAuctionHouseEntryFromFactionTemplate(auctioneer->GetFaction());
+        AuctionHouseMgr::GetAuctionHouseEntryFromHouse(AuctionHouseId::Neutral);
     if (!ahEntry)
         return 0;
 
-    AuctionHouseObject* auctionHouse = sAuctionMgr->GetAuctionsMap(auctioneer->GetFaction());
+    AuctionHouseObject* auctionHouse = sAuctionMgr->GetAuctionsMapByHouseId(AuctionHouseId::Neutral);
     if (!auctionHouse)
         return 0;
 
@@ -116,8 +117,11 @@ uint32 ListAtAuctionAction::ListItemsAt(Creature* auctioneer)
         }
     }
 
-    double const mult = sRandomPlayerbotMgr.GetSellMultiplier(bot);
-    float const margin = sPlayerbotAIConfig.ahProfitMargin;
+    // Mutual-aid AH: every listing priced at the same flat markup over the
+    // vendor sell price. No per-bot persona, no merchant role-play, no
+    // gaming the market. Bots farm + profit from their labor; the AH is
+    // regulated against runaway capitalism.
+    float const markup = sPlayerbotAIConfig.ahFlatMarkup;
     uint32 const maxActive = sPlayerbotAIConfig.ahListingMaxConcurrent;
     uint32 const auctionTime =
         uint32(12 * HOUR * sWorld->getRate(RATE_AUCTION_TIME));
@@ -141,13 +145,7 @@ uint32 ListAtAuctionAction::ListItemsAt(Creature* auctioneer)
             return;
 
         uint32 const vendorTotal = tpl->SellPrice * item->GetCount();
-        uint32 const estimatedAH = (uint32)(vendorTotal * mult);
-        // List any item where this bot's per-bot price exceeds vendor.
-        // AhProfitMargin (default 1.0) lets operators raise the bar if desired.
-        if (estimatedAH <= (uint32)(margin * vendorTotal))
-            return;
-
-        uint32 const buyout = estimatedAH;
+        uint32 const buyout = (uint32)(vendorTotal * markup);
         uint32 const bidStart = (uint32)(buyout * 0.95f);
         if (!buyout || !bidStart)
             return;
@@ -162,7 +160,7 @@ uint32 ListAtAuctionAction::ListItemsAt(Creature* auctioneer)
 
         AuctionEntry* AH = new AuctionEntry;
         AH->Id = sObjectMgr->GenerateAuctionID();
-        AH->houseId = AuctionHouseId(ahEntry->houseId);
+        AH->houseId = AuctionHouseId::Neutral;
         AH->item_guid = item->GetGUID();
         AH->item_template = item->GetEntry();
         AH->itemCount = item->GetCount();

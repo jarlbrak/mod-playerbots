@@ -89,17 +89,19 @@ Creature* BuyFromAuctionAction::FindNearestAuctioneer()
 
 uint32 BuyFromAuctionAction::BuyAtAuctioneer(Creature* auctioneer)
 {
+    // Unified single AH — read from the same Neutral house regardless of which
+    // auctioneer (Alliance, Horde, Neutral) the bot is standing at.
     AuctionHouseEntry const* ahEntry =
-        AuctionHouseMgr::GetAuctionHouseEntryFromFactionTemplate(auctioneer->GetFaction());
+        AuctionHouseMgr::GetAuctionHouseEntryFromHouse(AuctionHouseId::Neutral);
     if (!ahEntry)
         return 0;
 
-    AuctionHouseObject* auctionHouse = sAuctionMgr->GetAuctionsMap(auctioneer->GetFaction());
+    AuctionHouseObject* auctionHouse = sAuctionMgr->GetAuctionsMapByHouseId(AuctionHouseId::Neutral);
     if (!auctionHouse)
         return 0;
 
     ObjectGuid const botGuid = bot->GetGUID();
-    float const factor    = sPlayerbotAIConfig.ahBuyerWillingnessFactor;
+    float const markup    = sPlayerbotAIConfig.ahFlatMarkup;
     uint32 const maxBuys  = sPlayerbotAIConfig.ahBuyerMaxBuysPerCycle;
     uint32 const minGold  = sPlayerbotAIConfig.ahBuyerMinGold;
     uint32 bought = 0;
@@ -147,8 +149,12 @@ uint32 BuyFromAuctionAction::BuyAtAuctioneer(Creature* auctioneer)
         if (!wanted)
             continue;
 
-        uint32 const willingness = (uint32)(tpl->SellPrice * auction->itemCount * factor);
-        if (auction->buyout > willingness)
+        // Sanity ceiling — in the mutual-aid AH every listing is priced at
+        // exactly markup * vendor by the seller, so this gate normally never
+        // trips. Acts as a safety net against any legacy or third-party
+        // listings priced above the flat markup.
+        uint32 const ceiling = (uint32)(tpl->SellPrice * auction->itemCount * markup);
+        if (auction->buyout > ceiling)
             continue;
 
         // Leave a floor of running-around money in the bot's pocket.
