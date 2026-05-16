@@ -12,6 +12,11 @@
 
 bool InventoryValueTrigger::IsActive()
 {
+    static std::atomic<uint32> sCallCount{0};
+    uint32 const seq = ++sCallCount;
+    if (seq <= 5 || seq % 500 == 0)
+        LOG_INFO("playerbots", "ah/p4-trig: IsActive #{} bot={}", seq, bot->GetName());
+
     if (!sPlayerbotAIConfig.ahListingEnabled)
         return false;
     if (bot->InBattleground() || (bot->GetMap() && bot->GetMap()->IsDungeon()))

@@ -15,35 +15,50 @@
 #include "RandomPlayerbotMgr.h"
 #include "World.h"
 
-// Faction-default auction-house spot. Drag (Org) for Horde, Trade District (Stormwind) for Alliance.
+// Faction-default auction-house spot. Coords sit right next to the auctioneer trio in each city.
 // Bots that fire InventoryValueTrigger outside an existing auctioneer's range get teleported here.
 struct AhSpot { uint32 mapId; float x, y, z, o; };
-static AhSpot const kAhSpotHorde     = { 1, 1659.42f, -4434.18f,  22.17f, 4.92f };
-static AhSpot const kAhSpotAlliance  = { 0, -8833.38f,  623.81f,  93.94f, 0.93f };
+static AhSpot const kAhSpotHorde     = { 1,  1683.0f, -4461.0f,  20.4f, 4.92f }; // Org Drag, between Wabang/Thathung/Grimful
+static AhSpot const kAhSpotAlliance  = { 0, -8819.0f,   661.0f,  97.5f, 0.93f }; // SW Trade District, between Chilton/Fitch/Jaxon
+
+// Known auctioneer creature entries — used by FindNearestAuctioneer for a direct grid lookup
+// instead of the (post-teleport) stale "nearest npcs" AI_VALUE cache.
+static uint32 const kAuctioneerEntriesAlliance[] = { 8670, 8719, 15659 };
+static uint32 const kAuctioneerEntriesHorde[]    = { 8673, 8724, 9856  };
 
 bool ListAtAuctionAction::Execute(Event /*event*/)
 {
     if (!sPlayerbotAIConfig.ahListingEnabled)
         return false;
     if (bot->InBattleground() || (bot->GetMap() && bot->GetMap()->IsDungeon()))
+    {
+        LOG_INFO("playerbots", "ah/p4: skip bot {} in-bg-or-dungeon", bot->GetName());
         return false;
-    // Don't yank a bot mid-fight or while dead/on-transport; pending status is fine to bail on.
+    }
     if (!bot->IsAlive() || bot->IsInCombat() || bot->GetTransport())
+    {
+        LOG_INFO("playerbots", "ah/p4: skip bot {} dead/combat/transport", bot->GetName());
         return false;
+    }
 
-    // If we're not already near an auctioneer, route there. Teleport is the simplest cross-continent
-    // option and avoids parking N bots in the same flightmaster queue.
     Creature* auctioneer = FindNearestAuctioneer();
+    LOG_INFO("playerbots", "ah/p4: bot {} entered Execute, map={} pos=({:.0f},{:.0f}) auctioneer={}",
+             bot->GetName(), bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(),
+             auctioneer ? "found" : "null");
+
     if (!auctioneer)
     {
         AhSpot const& spot = (bot->GetTeamId() == TEAM_ALLIANCE) ? kAhSpotAlliance : kAhSpotHorde;
-        if (bot->GetMapId() != spot.mapId ||
-            bot->GetDistance(spot.x, spot.y, spot.z) > 30.0f)
+        bool needRoute = (bot->GetMapId() != spot.mapId ||
+                          bot->GetDistance(spot.x, spot.y, spot.z) > 30.0f);
+        if (needRoute)
         {
-            bot->TeleportTo(spot.mapId, spot.x, spot.y, spot.z, spot.o);
-            return true; // listing happens next tick once teleport settles + npcs are visible
+            bool ok = bot->TeleportTo(spot.mapId, spot.x, spot.y, spot.z, spot.o);
+            LOG_INFO("playerbots", "ah/p4: teleport bot {} -> map{} spot result={}",
+                     bot->GetName(), spot.mapId, ok);
+            return true;
         }
-        // Already at the spot but the local NPC scan returned nothing — wait a tick for nearest-npcs cache.
+        LOG_INFO("playerbots", "ah/p4: bot {} at-spot, waiting for npcs cache", bot->GetName());
         return true;
     }
 
@@ -53,27 +68,31 @@ bool ListAtAuctionAction::Execute(Event /*event*/)
             auctioneer->GetPositionX(),
             auctioneer->GetPositionY(),
             auctioneer->GetPositionZ());
+        LOG_INFO("playerbots", "ah/p4: bot {} moving to auctioneer", bot->GetName());
         return true;
     }
 
     uint32 listed = ListItemsAt(auctioneer);
-    if (listed > 0)
-        LOG_INFO("playerbots", "Bot {} listed {} items at AH", bot->GetName(), listed);
+    LOG_INFO("playerbots", "ah/p4: bot {} listed {} items at AH", bot->GetName(), listed);
     return listed > 0;
 }
 
 Creature* ListAtAuctionAction::FindNearestAuctioneer()
 {
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest npcs");
+    // Direct grid lookup via bot->FindNearestCreature avoids the "nearest npcs"
+    // AI_VALUE cache, which goes stale right after a teleport.
+    bool alliance = bot->GetTeamId() == TEAM_ALLIANCE;
+    uint32 const* entries = alliance ? kAuctioneerEntriesAlliance : kAuctioneerEntriesHorde;
+    size_t const count = alliance
+        ? sizeof(kAuctioneerEntriesAlliance) / sizeof(uint32)
+        : sizeof(kAuctioneerEntriesHorde)    / sizeof(uint32);
+
     Creature* best = nullptr;
-    float bestDist = 200.0f;
-    for (ObjectGuid const& guid : npcs)
+    float bestDist = 100.0f;
+    for (size_t i = 0; i < count; ++i)
     {
-        Creature* c = dynamic_cast<Creature*>(botAI->GetUnit(guid));
+        Creature* c = bot->FindNearestCreature(entries[i], 100.0f, true);
         if (!c)
-            continue;
-        CreatureTemplate const* ct = c->GetCreatureTemplate();
-        if (!ct || !(ct->npcflag & UNIT_NPC_FLAG_AUCTIONEER))
             continue;
         float d = bot->GetDistance(c);
         if (d < bestDist)

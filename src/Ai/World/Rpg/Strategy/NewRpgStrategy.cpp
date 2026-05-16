@@ -73,11 +73,15 @@ void NewRpgStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
             }
         )
     );
+    // Relevance >= 100 is required for triggers to be evaluated when the bot's
+    // engine is in "minimal" mode (Engine::ProcessTriggers filters anything lower
+    // when the bot is far from real players). The trigger interval (5s) still
+    // throttles evaluation; relevance just gets us past the minimal-mode gate.
     triggers.push_back(
         new TriggerNode(
             "inventory value",
             {
-                NextAction("list at auction", 12.0f)
+                NextAction("list at auction", 100.0f)
             }
         )
     );
