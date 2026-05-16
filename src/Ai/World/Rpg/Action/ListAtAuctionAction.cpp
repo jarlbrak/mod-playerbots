@@ -15,16 +15,37 @@
 #include "RandomPlayerbotMgr.h"
 #include "World.h"
 
+// Faction-default auction-house spot. Drag (Org) for Horde, Trade District (Stormwind) for Alliance.
+// Bots that fire InventoryValueTrigger outside an existing auctioneer's range get teleported here.
+struct AhSpot { uint32 mapId; float x, y, z, o; };
+static AhSpot const kAhSpotHorde     = { 1, 1659.42f, -4434.18f,  22.17f, 4.92f };
+static AhSpot const kAhSpotAlliance  = { 0, -8833.38f,  623.81f,  93.94f, 0.93f };
+
 bool ListAtAuctionAction::Execute(Event /*event*/)
 {
     if (!sPlayerbotAIConfig.ahListingEnabled)
         return false;
     if (bot->InBattleground() || (bot->GetMap() && bot->GetMap()->IsDungeon()))
         return false;
+    // Don't yank a bot mid-fight or while dead/on-transport; pending status is fine to bail on.
+    if (!bot->IsAlive() || bot->IsInCombat() || bot->GetTransport())
+        return false;
 
+    // If we're not already near an auctioneer, route there. Teleport is the simplest cross-continent
+    // option and avoids parking N bots in the same flightmaster queue.
     Creature* auctioneer = FindNearestAuctioneer();
     if (!auctioneer)
-        return false;
+    {
+        AhSpot const& spot = (bot->GetTeamId() == TEAM_ALLIANCE) ? kAhSpotAlliance : kAhSpotHorde;
+        if (bot->GetMapId() != spot.mapId ||
+            bot->GetDistance(spot.x, spot.y, spot.z) > 30.0f)
+        {
+            bot->TeleportTo(spot.mapId, spot.x, spot.y, spot.z, spot.o);
+            return true; // listing happens next tick once teleport settles + npcs are visible
+        }
+        // Already at the spot but the local NPC scan returned nothing — wait a tick for nearest-npcs cache.
+        return true;
+    }
 
     if (bot->GetDistance(auctioneer) > 5.0f)
     {
