@@ -239,6 +239,12 @@ bool PlayerbotAIConfig::Initialize()
     ahListingMaxConcurrent   = sConfigMgr->GetOption<uint32>("AiPlayerbot.AhListingMaxConcurrent", 5);
     ahBagPressureFreeSlots   = sConfigMgr->GetOption<uint32>("AiPlayerbot.AhBagPressureFreeSlots", 4);
 
+    ahBuyingEnabled          = sConfigMgr->GetOption<bool>("AiPlayerbot.AhBuyingEnabled", true);
+    ahBuyerMinGold           = sConfigMgr->GetOption<uint32>("AiPlayerbot.AhBuyerMinGold", 10000);
+    ahBuyerMinFreeBagSlots   = sConfigMgr->GetOption<uint32>("AiPlayerbot.AhBuyerMinFreeBagSlots", 4);
+    ahBuyerMaxBuysPerCycle   = sConfigMgr->GetOption<uint32>("AiPlayerbot.AhBuyerMaxBuysPerCycle", 3);
+    ahBuyerWillingnessFactor = sConfigMgr->GetOption<float>("AiPlayerbot.AhBuyerWillingnessFactor", 2.0f);
+
     restrictHealerDPS = sConfigMgr->GetOption<bool>("AiPlayerbot.HealerDPSMapRestriction", false);
     LoadList<std::vector<uint32>>(
         sConfigMgr->GetOption<std::string>("AiPlayerbot.RestrictedHealerDPSMaps",

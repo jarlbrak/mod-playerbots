@@ -10,6 +10,7 @@
 #include "FishingTriggers.h"
 #include "GenericTriggers.h"
 #include "GuildTriggers.h"
+#include "AhBuyerTrigger.h"
 #include "InventoryValueTrigger.h"
 #include "LfgTriggers.h"
 #include "LootTriggers.h"
@@ -237,6 +238,7 @@ public:
         creators["travel flight status"] = &TriggerContext::travel_flight_status;
         creators["outdoor pvp status"] = &TriggerContext::outdoor_pvp_status;
         creators["inventory value"] = &TriggerContext::inventory_value;
+        creators["ah buyer"] = &TriggerContext::ah_buyer;
         creators["can self resurrect"] = &TriggerContext::can_self_resurrect;
         creators["can fish"] = &TriggerContext::can_fish;
         creators["can use fishing bobber"] = &TriggerContext::can_use_fishing_bobber;
@@ -448,6 +450,7 @@ private:
     static Trigger* travel_flight_status(PlayerbotAI* botAI) { return new NewRpgStatusTrigger(botAI, RPG_TRAVEL_FLIGHT); }
     static Trigger* outdoor_pvp_status(PlayerbotAI* botAI) { return new NewRpgStatusTrigger(botAI, RPG_OUTDOOR_PVP); }
     static Trigger* inventory_value(PlayerbotAI* botAI) { return new InventoryValueTrigger(botAI); }
+    static Trigger* ah_buyer(PlayerbotAI* botAI) { return new AhBuyerTrigger(botAI); }
     static Trigger* can_self_resurrect(PlayerbotAI* ai) { return new SelfResurrectTrigger(ai); }
     static Trigger* can_fish(PlayerbotAI* ai) { return new CanFishTrigger(ai); }
     static Trigger* can_use_fishing_bobber(PlayerbotAI* ai) { return new CanUseFishingBobberTrigger(ai); }

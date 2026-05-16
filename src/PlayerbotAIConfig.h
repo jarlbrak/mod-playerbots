@@ -153,6 +153,13 @@ public:
     uint32 ahListingMaxConcurrent;
     uint32 ahBagPressureFreeSlots;
 
+    // F4 P4b — AH buyer side
+    bool ahBuyingEnabled;
+    uint32 ahBuyerMinGold;            // floor pocket money before buying (copper)
+    uint32 ahBuyerMinFreeBagSlots;    // must have room to carry purchases
+    uint32 ahBuyerMaxBuysPerCycle;    // per action invocation cap
+    float  ahBuyerWillingnessFactor;  // buy if buyout < factor * vendorSellPrice * count
+
     // Buff system
     // Min group size to use Greater buffs (Paladin, Mage, Druid). Default: 3
     int32 minBotsForGreaterBuff;

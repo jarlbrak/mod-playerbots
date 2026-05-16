@@ -734,6 +734,25 @@ AiPlayerbot.AhProfitMargin = 1.0
 AiPlayerbot.AhListingMaxConcurrent = 5
 AiPlayerbot.AhBagPressureFreeSlots = 4
 
+#
+# F4 P4 buyer side — completes the AH economy loop. Bots with idle gold
+# and bag space periodically visit the AH to instant-buyout listings
+# they consider bargains (buyout < willingnessFactor * vendor sell price
+# * stack count). Bought items arrive via standard auction-won mail.
+#
+# AhBuyerMinGold: bot keeps at least this much in pocket; copper units.
+# AhBuyerMinFreeBagSlots: must have at least this many open slots.
+# AhBuyerMaxBuysPerCycle: cap per single action invocation (rate limit).
+# AhBuyerWillingnessFactor: 1.0 = pay up to vendor value, 2.0 = pay up
+#   to 2x vendor — matches the upper end of seller multipliers, ensuring
+#   most listings find a buyer over time.
+#
+AiPlayerbot.AhBuyingEnabled = 1
+AiPlayerbot.AhBuyerMinGold = 10000
+AiPlayerbot.AhBuyerMinFreeBagSlots = 4
+AiPlayerbot.AhBuyerMaxBuysPerCycle = 3
+AiPlayerbot.AhBuyerWillingnessFactor = 2.0
+
 # Enable/Disable periodic online - offline of randombots to mimic the real-world scenario where not all players are online simultaneously
 # When enabled, randombots are randomly selected to go online or offline periodically from a larger set
 # Default: 0 (disabled, the set of online bots remains fixed)
