@@ -3,9 +3,9 @@
 
 void InteractionEventBuffer::PushWhisper(uint64_t bot_guid, std::string from_name,
                                           uint64_t from_guid, std::string text,
-                                          int64_t ts) {
+                                          int64_t ts, uint32_t chat_type) {
     std::lock_guard<std::mutex> g(mu_);
-    whispers_[bot_guid].push_back({std::move(from_name), from_guid, std::move(text), ts});
+    whispers_[bot_guid].push_back({std::move(from_name), from_guid, std::move(text), ts, chat_type});
 }
 
 void InteractionEventBuffer::PushInvite(uint64_t bot_guid, std::string from_name,

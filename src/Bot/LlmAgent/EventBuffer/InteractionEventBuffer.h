@@ -18,6 +18,7 @@ struct UnhandledWhisper {
     uint64_t    from_guid = 0;
     std::string text;
     int64_t     ts = 0;
+    uint32_t    chat_type = 0;   // AC ChatMsg enum: WHISPER=7, PARTY=2, SAY=1, ...
 };
 
 struct RecentGroupJoin {
@@ -35,7 +36,7 @@ struct InteractionPayload {
 class InteractionEventBuffer {
   public:
     void PushWhisper(uint64_t bot_guid, std::string from_name, uint64_t from_guid,
-                     std::string text, int64_t ts);
+                     std::string text, int64_t ts, uint32_t chat_type = 0);
     void PushInvite (uint64_t bot_guid, std::string from_name, uint64_t from_guid,
                      int64_t ts);
     void PushJoin   (uint64_t bot_guid, std::string leader_name, uint64_t leader_guid,

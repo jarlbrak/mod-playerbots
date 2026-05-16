@@ -34,6 +34,15 @@ struct LlmRequest {
     nlohmann::json digest_json;   // kept for JSONL record
     std::chrono::steady_clock::time_point ts_enqueued;
     uint32_t tier = 1;   // 1 = T1 (replan), 2 = T2 (interactive)
+
+    // Phase 5.2 v9: chat-routing context captured at enqueue time so the
+    // drain-phase can route the reply on the SAME channel the inbound used,
+    // without re-querying the interaction buffer (which may have new entries
+    // by the time inference finishes ~20-30 s later).
+    uint8_t  chat_event_kind = 0;  // LlmAgentTier3::EventKind: 0=Whisper, 1=Invite, 2=Join
+    uint32_t chat_type = 0;        // AC ChatMsg enum (CHAT_MSG_PARTY_LEADER=51, WHISPER=7, ...)
+    std::string chat_sender_name;
+    uint64_t chat_sender_guid = 0;
 };
 
 struct LlmResult {
@@ -47,6 +56,13 @@ struct LlmResult {
     uint64_t inference_ms = 0;
     uint64_t total_latency_ms = 0;
     uint32_t tier = 1;   // 1 = T1 (replan), 2 = T2 (interactive)
+
+    // Phase 5.2 v9: captured chat context (echoed from LlmRequest) so the
+    // action's drain phase can route the reply correctly.
+    uint8_t  chat_event_kind = 0;
+    uint32_t chat_type = 0;
+    std::string chat_sender_name;
+    uint64_t chat_sender_guid = 0;
 };
 
 class LlmAgentManager {

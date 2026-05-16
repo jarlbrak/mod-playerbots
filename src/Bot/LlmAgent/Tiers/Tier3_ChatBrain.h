@@ -17,6 +17,7 @@ struct ChatContext {
     std::string sender_name;
     uint64_t    sender_guid = 0;
     std::string sender_message;     // populated only for Whisper
+    uint32_t    chat_type = 0;      // AC ChatMsg enum (WHISPER=7, PARTY=2, SAY=1, ...)
 };
 
 // Returns the JSON user-message payload for a T3 LLM call.

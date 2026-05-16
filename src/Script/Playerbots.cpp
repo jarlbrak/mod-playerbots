@@ -186,6 +186,11 @@ public:
 
     bool OnPlayerCanUseChat(Player* player, uint32 type, uint32 /*lang*/, std::string& msg, Player* receiver) override
     {
+        LOG_INFO("server.loading",
+                 "[LlmAgent] OnPlayerCanUseChat(Player) type={} sender='{}' receiver='{}' has_botAI={}",
+                 type, player ? player->GetName() : "<null>",
+                 receiver ? receiver->GetName() : "<null>",
+                 (receiver && PlayerbotsMgr::instance().GetPlayerbotAI(receiver) != nullptr) ? 1 : 0);
         if (type != CHAT_MSG_WHISPER)
         {
             return true;
@@ -211,21 +216,28 @@ public:
 
     bool OnPlayerCanUseChat(Player* player, uint32 type, uint32 /*lang*/, std::string& msg, Group* group) override
     {
+        int members_total = 0;
+        int members_with_ai = 0;
         for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
         {
             Player* const member = itr->GetSource();
 
             if (member == nullptr)
                 continue;
+            ++members_total;
 
             PlayerbotAI* const botAI = PlayerbotsMgr::instance().GetPlayerbotAI(member);
 
             if (botAI == nullptr)
                 continue;
+            ++members_with_ai;
 
             botAI->HandleCommand(type, msg, player);
         }
-
+        LOG_INFO("server.loading",
+                 "[LlmAgent] OnPlayerCanUseChat(Group) type={} sender='{}' members_total={} members_with_ai={}",
+                 type, player ? player->GetName() : "<null>",
+                 members_total, members_with_ai);
         return true;
     }
 

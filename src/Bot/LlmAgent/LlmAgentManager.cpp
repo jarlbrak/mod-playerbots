@@ -2,6 +2,10 @@
 #include "Client/LlmHttpClient.h"
 #include "Schemas/Goal.h"
 
+#ifndef LLMAGENT_UNIT_TESTS
+#include "Log.h"   // LOG_ERROR — only available in the AC build
+#endif
+
 #include <chrono>
 #include <ctime>
 #include <filesystem>
@@ -177,11 +181,44 @@ void LlmAgentManager::WorkerLoop() {
             req = std::move(queue_.front());
             queue_.pop_front();
         }
-        HandleRequest(std::move(req));
+        // Phase 5.2 v8: catch any exception escaping HandleRequest so the
+        // worker thread survives. HandleRequest itself uses an RAII guard to
+        // clear in_flight on every exit path; the catch here is belt-and-
+        // suspenders so we never silently lose a worker thread.
+        try {
+            HandleRequest(std::move(req));
+        } catch (const std::exception& e) {
+#ifndef LLMAGENT_UNIT_TESTS
+            LOG_ERROR("playerbots", "[LlmAgent] WorkerLoop: HandleRequest threw std::exception: {}", e.what());
+#endif
+            (void)e;
+        } catch (...) {
+#ifndef LLMAGENT_UNIT_TESTS
+            LOG_ERROR("playerbots", "[LlmAgent] WorkerLoop: HandleRequest threw unknown exception");
+#endif
+        }
     }
 }
 
 void LlmAgentManager::HandleRequest(LlmRequest req) {
+    // Phase 5.2 v8: RAII guard — clear in_flight for THIS (bot,tier) on every
+    // exit path: normal return, exception, early return. Without this, any
+    // exception (json throw, httplib throw, anything) leaks the flag forever
+    // and the bot's trigger gate sees in_flight=1 perpetually.
+    struct InflightGuard {
+        LlmAgentManager* mgr;
+        uint64_t bot_guid;
+        uint32_t tier;
+        ~InflightGuard() {
+            std::lock_guard<std::mutex> g(mgr->inflight_mu_);
+            auto it = mgr->inflight_.find(bot_guid);
+            if (it == mgr->inflight_.end()) return;
+            it->second.erase(tier);
+            if (it->second.empty()) mgr->inflight_.erase(it);
+        }
+    };
+    InflightGuard _inflight_guard{this, req.bot_guid, req.tier};
+
     auto t_dispatch = std::chrono::steady_clock::now();
     uint64_t queue_wait_ms = ms_since(req.ts_enqueued);
 
@@ -197,6 +234,12 @@ void LlmAgentManager::HandleRequest(LlmRequest req) {
     result.queue_wait_ms = queue_wait_ms;
     result.inference_ms = inference_ms;
     result.total_latency_ms = queue_wait_ms + inference_ms;
+    // Phase 5.2 v9: echo the captured chat context so the drain-phase routes
+    // the reply on the original channel.
+    result.chat_event_kind = req.chat_event_kind;
+    result.chat_type       = req.chat_type;
+    result.chat_sender_name = req.chat_sender_name;
+    result.chat_sender_guid = req.chat_sender_guid;
 
     if (!raw.has_value()) {
         result.parsed_status = "transport_error";
@@ -263,15 +306,8 @@ void LlmAgentManager::HandleRequest(LlmRequest req) {
         std::lock_guard<std::mutex> g(results_mu_);
         results_[req.bot_guid][req.tier].push(std::move(result));
     }
-    // Clear in-flight.
-    {
-        std::lock_guard<std::mutex> g(inflight_mu_);
-        auto it = inflight_.find(req.bot_guid);
-        if (it != inflight_.end()) {
-            it->second.erase(req.tier);
-            if (it->second.empty()) inflight_.erase(it);
-        }
-    }
+    // Phase 5.2 v8: in_flight clear is handled by InflightGuard's destructor
+    // at function exit (covers normal return, exception, every error path).
 }
 
 void LlmAgentManager::AppendJsonl(const std::string& line) {

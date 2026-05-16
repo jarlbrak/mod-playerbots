@@ -39,11 +39,14 @@ bool BuildChatContext(uint64_t bot_guid, ChatContext& out) {
     auto& mgr = LlmAgentManager::Instance();
     auto payload = mgr.Interactions().SnapshotFor(bot_guid);
     if (!payload.recent_whispers.empty()) {
-        const auto& w = payload.recent_whispers.front();
+        // Phase 5.2: respond to the MOST RECENT message, not the oldest.
+        // Buffer is append-only, so back() is the latest.
+        const auto& w = payload.recent_whispers.back();
         out.kind = EventKind::Whisper;
         out.sender_name = w.from_name;
         out.sender_guid = w.from_guid;
         out.sender_message = w.text;
+        out.chat_type = w.chat_type;
         return true;
     }
     if (!payload.pending_invites.empty()) {
@@ -81,19 +84,42 @@ const char* tool_call_name(const ParsedToolCall& c) {
 
 void QueueUtterance(PlayerbotAI* botAI, const std::string& utterance,
                     const ChatContext& ctx) {
-    uint32 chat_type = (ctx.kind == EventKind::Join)
-        ? CHAT_MSG_PARTY
-        : CHAT_MSG_WHISPER;
-    uint32 guid1 = static_cast<uint32>(ctx.sender_guid & 0xFFFFFFFFULL);
-    ChatQueuedReply reply(
-        chat_type,
-        guid1,
-        /*guid2*/0,
-        utterance,
-        /*chanName*/std::string{},
-        ctx.sender_name,
-        static_cast<time_t>(time(nullptr)));
-    botAI->QueueChatResponse(reply);
+    // Phase 5.2: do NOT use botAI->QueueChatResponse — mod-playerbots'
+    // ChatReplyAction::ChatReplyDo treats the queued m_msg as the INCOMING
+    // message and synthesizes a fresh reply via GenerateReplyMessage,
+    // throwing away our LLM utterance. Send directly via the bot's
+    // Whisper/Say primitives so our text actually reaches the player.
+    Player* bot = botAI->GetBot();
+    if (!bot) return;
+    if (ctx.kind == EventKind::Join) {
+        botAI->SayToParty(utterance);
+        return;
+    }
+    // Phase 5.2: respond in the SAME channel the message arrived on. If a
+    // player party-chats the bot, reply in party chat — not whisper.
+    switch (ctx.chat_type) {
+        case CHAT_MSG_PARTY:
+        case CHAT_MSG_PARTY_LEADER:
+        case CHAT_MSG_RAID:
+        case CHAT_MSG_RAID_LEADER:
+            botAI->SayToParty(utterance);
+            return;
+        case CHAT_MSG_GUILD:
+        case CHAT_MSG_OFFICER:
+            botAI->SayToGuild(utterance);
+            return;
+        case CHAT_MSG_SAY:
+            botAI->Say(utterance);
+            return;
+        case CHAT_MSG_YELL:
+            botAI->Yell(utterance);
+            return;
+        case CHAT_MSG_WHISPER:
+        default:
+            if (!ctx.sender_name.empty())
+                botAI->Whisper(utterance, ctx.sender_name);
+            return;
+    }
 }
 
 }  // namespace
@@ -130,8 +156,19 @@ bool LlmChatAction::Execute(Event /*event*/) {
         const auto& env = std::get<ParsedChatEnvelope>(parsed);
         mgr.Counters().IncChatEnvelopeParsed("ok");
 
+        // Phase 5.2 v9: route based on the chat context captured at ENQUEUE
+        // time (echoed back via LlmResult). Do NOT re-derive from the live
+        // interaction buffer — by now ~20-30 s of inference latency has
+        // passed and the buffer may hold newer entries with different
+        // chat_type, which previously caused party-chat queries to be
+        // answered via whisper.
         ChatContext ctx;
-        if (!BuildChatContext(guid, ctx)) {
+        ctx.kind          = static_cast<EventKind>(r.chat_event_kind);
+        ctx.sender_name   = r.chat_sender_name;
+        ctx.sender_guid   = r.chat_sender_guid;
+        ctx.chat_type     = r.chat_type;
+        // ctx.sender_message is unused in QueueUtterance; leave empty.
+        if (ctx.sender_name.empty() && ctx.kind != EventKind::Join) {
             mgr.Counters().IncChatSenderOffline();
             mgr.Interactions().Clear(guid);
             continue;
@@ -202,6 +239,12 @@ bool LlmChatAction::Execute(Event /*event*/) {
             req.body_json   = LlmAgentTier3::BuildT3RequestBody(botAI, ctx);
             req.digest_json = LlmAgentTier3::BuildT3Digest(botAI, ctx);
             req.tier        = 3;
+            // Phase 5.2 v9: capture chat context so the drain phase routes
+            // the reply on the correct channel even after inference latency.
+            req.chat_event_kind = static_cast<uint8_t>(ctx.kind);
+            req.chat_type       = ctx.chat_type;
+            req.chat_sender_name = ctx.sender_name;
+            req.chat_sender_guid = ctx.sender_guid;
             mgr.Enqueue(std::move(req));
         }
     }

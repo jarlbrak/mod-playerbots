@@ -42,6 +42,7 @@ nlohmann::json BuildT3Digest(PlayerbotAI* botAI, const ChatContext& ctx) {
     digest["event_kind"]     = event_kind_str(ctx.kind);
     digest["sender_name"]    = ctx.sender_name;
     digest["sender_message"] = ctx.sender_message;
+    digest["chat_type"]      = ctx.chat_type;  // v9: surfaces routing input in JSONL
 
     auto& mgr = LlmAgentManager::Instance();
     const auto& cfg = mgr.Config();

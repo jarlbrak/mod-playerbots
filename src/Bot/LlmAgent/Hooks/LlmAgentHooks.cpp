@@ -6,6 +6,7 @@
 #include "Player.h"
 #include "PlayerbotMgr.h"
 #include "DBCStores.h"
+#include "SharedDefines.h"
 #endif
 
 #include <ctime>
@@ -30,14 +31,50 @@ std::string get_bot_zone_name(Player* bot) {
 
 namespace LlmAgentHooks {
 
-void OnWhisperReceived(Player* bot, Player* sender, const std::string& text) {
+void OnWhisperReceived(Player* bot, Player* sender, const std::string& text, uint32_t chat_type) {
 #ifndef LLMAGENT_UNIT_TESTS
     if (!bot || !sender) return;
-    LOG_INFO("server.loading",
-             "[LlmAgent] OnWhisperReceived fired: bot='{}' sender='{}' sender_is_bot={}",
-             bot->GetName(), sender->GetName(),
-             sPlayerbotsMgr.GetPlayerbotAI(sender) != nullptr ? 1 : 0);
+    // Phase 5.2: filter out addon/system spam (DBM, Skada, LibGroupTalents,
+    // LOOT_OPENED, etc. all flood the bot's chat queue when it's grouped
+    // with a real player). Only feed real conversational types to T3.
+    switch (chat_type) {
+        case CHAT_MSG_WHISPER:
+        case CHAT_MSG_PARTY:
+        case CHAT_MSG_PARTY_LEADER:
+        case CHAT_MSG_SAY:
+        case CHAT_MSG_GUILD:
+        case CHAT_MSG_OFFICER:
+        case CHAT_MSG_RAID:
+        case CHAT_MSG_RAID_LEADER:
+        case CHAT_MSG_YELL:
+            break;
+        case 0:  // legacy callers (no type) — treat as whisper
+            chat_type = CHAT_MSG_WHISPER;
+            break;
+        default:
+            return;
+    }
     if (sPlayerbotsMgr.GetPlayerbotAI(sender) != nullptr) return;  // bot-to-bot whisper, ignore
+
+    // Phase 5.2 v7: addon traffic in 3.3.5a uses regular chat channels (CHAT_MSG_PARTY
+    // typically) with a tab-delimited "AddonPrefix\tpayload" string. The chat_type
+    // filter can't catch these because the wire type is identical to real chat.
+    // Heuristic: if a TAB appears in the first 25 chars, treat as addon traffic.
+    // (Real player chat doesn't typically contain tabs early.)
+    {
+        size_t scan_end = text.size() < 25 ? text.size() : 25;
+        for (size_t i = 0; i < scan_end; ++i) {
+            if (text[i] == '\t') {
+                LOG_INFO("server.loading",
+                         "[LlmAgent] OnWhisperReceived skipped addon traffic: bot='{}' sender='{}' type={} text='{}'",
+                         bot->GetName(), sender->GetName(), chat_type, truncate_whisper(text));
+                return;
+            }
+        }
+    }
+    LOG_INFO("server.loading",
+             "[LlmAgent] OnWhisperReceived fired: bot='{}' sender='{}' type={} text='{}'",
+             bot->GetName(), sender->GetName(), chat_type, truncate_whisper(text));
 
     auto& mgr = LlmAgentManager::Instance();
     if (!mgr.Enabled()) return;
@@ -68,7 +105,7 @@ void OnWhisperReceived(Player* bot, Player* sender, const std::string& text) {
     }
     mgr.Interactions().PushWhisper(
         bot_guid, sender->GetName(), sender->GetGUID().GetRawValue(),
-        truncate_whisper(text), static_cast<int64_t>(time(nullptr)));
+        truncate_whisper(text), static_cast<int64_t>(time(nullptr)), chat_type);
     mgr.Whispers().Push(
         bot_guid, sender->GetGUID().GetRawValue(),
         WhisperEntry::Incoming,
