@@ -234,6 +234,12 @@ bool PlayerbotAIConfig::Initialize()
         sConfigMgr->GetOption<int32>("AiPlayerbot.MaxRandomBotsPriceChangeInterval", 48 * HOUR);
     randomBotJoinLfg = sConfigMgr->GetOption<bool>("AiPlayerbot.RandomBotJoinLfg", true);
 
+    ahListingEnabled         = sConfigMgr->GetOption<bool>("AiPlayerbot.AhListingEnabled", true);
+    ahProfitMargin           = sConfigMgr->GetOption<float>("AiPlayerbot.AhProfitMargin", 1.5f);
+    ahListingMaxConcurrent   = sConfigMgr->GetOption<uint32>("AiPlayerbot.AhListingMaxConcurrent", 5);
+    ahBagPressureFreeSlots   = sConfigMgr->GetOption<uint32>("AiPlayerbot.AhBagPressureFreeSlots", 4);
+    ahHighValueItemThreshold = sConfigMgr->GetOption<uint32>("AiPlayerbot.AhHighValueItemThreshold", 50000);
+
     restrictHealerDPS = sConfigMgr->GetOption<bool>("AiPlayerbot.HealerDPSMapRestriction", false);
     LoadList<std::vector<uint32>>(
         sConfigMgr->GetOption<std::string>("AiPlayerbot.RestrictedHealerDPSMaps",
