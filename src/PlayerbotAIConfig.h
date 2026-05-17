@@ -58,7 +58,9 @@ enum NewRpgStatus : int
     // Taking a break
     RPG_REST = 7,
     RPG_OUTDOOR_PVP = 8,
-    RPG_STATUS_END = 9
+    // Go visit the AH (replaces F4 P4 teleport behavior)
+    RPG_GO_AH_VISIT = 9,
+    RPG_STATUS_END = 10
 };
 
 #define MAX_SPECNO 20
@@ -158,6 +160,9 @@ public:
     uint32 ahBuyerMinGold;            // floor pocket money before buying (copper)
     uint32 ahBuyerMinFreeBagSlots;    // must have room to carry purchases
     uint32 ahBuyerMaxBuysPerCycle;    // per action invocation cap
+
+    // F5 — AH visit (walk instead of teleport, 2h cooldown)
+    uint32 ahCooldownMs;              // min ms between AH visits per bot
 
     // Buff system
     // Min group size to use Greater buffs (Paladin, Mage, Druid). Default: 3

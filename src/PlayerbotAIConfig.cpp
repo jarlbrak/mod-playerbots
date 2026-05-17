@@ -244,6 +244,8 @@ bool PlayerbotAIConfig::Initialize()
     ahBuyerMinFreeBagSlots   = sConfigMgr->GetOption<uint32>("AiPlayerbot.AhBuyerMinFreeBagSlots", 4);
     ahBuyerMaxBuysPerCycle   = sConfigMgr->GetOption<uint32>("AiPlayerbot.AhBuyerMaxBuysPerCycle", 3);
 
+    ahCooldownMs             = sConfigMgr->GetOption<uint32>("AiPlayerbot.AhCooldownMs", 7200000);  // 2h default
+
     restrictHealerDPS = sConfigMgr->GetOption<bool>("AiPlayerbot.HealerDPSMapRestriction", false);
     LoadList<std::vector<uint32>>(
         sConfigMgr->GetOption<std::string>("AiPlayerbot.RestrictedHealerDPSMaps",
