@@ -63,6 +63,12 @@ struct NewRpgInfo
     {
         ObjectGuid::LowType capturePointSpawnId{0};
     };
+    // RPG_GO_AH_VISIT
+    struct GoAhVisit
+    {
+        WorldPosition pos{};        // AhSpot coord chosen at status entry
+        char const*   cityLabel{};  // static-storage label for logs
+    };
     struct Idle
     {
     };
@@ -85,7 +91,8 @@ struct NewRpgInfo
         DoQuest,
         Rest,
         TravelFlight,
-        OutdoorPvP
+        OutdoorPvP,
+        GoAhVisit
     >;
     RpgData data;
 
@@ -100,6 +107,7 @@ struct NewRpgInfo
     void ChangeToOutdoorPvp(ObjectGuid::LowType capturePointSpawnId = 0);
     void ChangeToRest();
     void ChangeToIdle();
+    void ChangeToGoAhVisit(WorldPosition pos, char const* cityLabel);
     bool CanChangeTo(NewRpgStatus status);
     void Reset();
     void SetMoveFarTo(WorldPosition pos);

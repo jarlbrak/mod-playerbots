@@ -67,6 +67,15 @@ void NewRpgInfo::ChangeToIdle()
     data = Idle{};
 }
 
+void NewRpgInfo::ChangeToGoAhVisit(WorldPosition pos, char const* cityLabel)
+{
+    startT = getMSTime();
+    GoAhVisit visit;
+    visit.pos = pos;
+    visit.cityLabel = cityLabel;
+    data = visit;
+}
+
 bool NewRpgInfo::CanChangeTo(NewRpgStatus)
 {
     return true;
@@ -99,6 +108,7 @@ NewRpgStatus NewRpgInfo::GetStatus()
         if constexpr (std::is_same_v<T, DoQuest>) return RPG_DO_QUEST;
         if constexpr (std::is_same_v<T, TravelFlight>) return RPG_TRAVEL_FLIGHT;
         if constexpr (std::is_same_v<T, OutdoorPvP>) return RPG_OUTDOOR_PVP;
+        if constexpr (std::is_same_v<T, GoAhVisit>) return RPG_GO_AH_VISIT;
         return RPG_IDLE;
     }, data);
 }
@@ -169,6 +179,14 @@ std::string NewRpgInfo::ToString()
                 out << "\nNo capture point assigned.";
             else
                 out << "\ncapturePointSpawnId: " << arg.capturePointSpawnId;
+        }
+        else if constexpr (std::is_same_v<T, GoAhVisit>)
+        {
+            out << "GO_AH_VISIT";
+            out << "\ncity: " << (arg.cityLabel ? arg.cityLabel : "<null>");
+            out << "\npos: " << arg.pos.GetMapId() << " " << arg.pos.GetPositionX() << " "
+                << arg.pos.GetPositionY() << " " << arg.pos.GetPositionZ();
+            out << "\nlastGoAhVisit: " << startT;
         }
         else
             out << "UNKNOWN";
