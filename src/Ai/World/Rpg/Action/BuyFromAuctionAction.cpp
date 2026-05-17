@@ -5,6 +5,7 @@
 
 #include "BuyFromAuctionAction.h"
 #include "AhSpotTable.h"
+#include "AhVisit.h"
 
 #include "AuctionHouseMgr.h"
 #include "DatabaseEnv.h"
@@ -26,15 +27,11 @@ bool BuyFromAuctionAction::Execute(Event /*event*/)
     Creature* auctioneer = FindNearestAuctioneer();
     if (!auctioneer)
     {
-        AhSpot const& spot = PickNearestAhSpot(bot);
-        bool needRoute = (bot->GetMapId() != spot.mapId ||
-                          bot->GetDistance(spot.x, spot.y, spot.z) > 30.0f);
-        if (needRoute)
-        {
-            bool ok = bot->TeleportTo(spot.mapId, spot.x, spot.y, spot.z, spot.o);
-            LOG_INFO("playerbots", "ah/p4b: route bot {} -> {} (map{}) result={}",
-                     bot->GetName(), spot.label, spot.mapId, ok);
-        }
+        // No auctioneer in range. Queue an AH errand for the
+        // NewRpgGoAhVisitAction to pick up — but only if the cooldown is
+        // clear. The action will travel via MoveFarTo, no teleport.
+        if (!AhCooldownActive(bot))
+            botAI->ahErrandPending = true;
         return true;
     }
 
@@ -47,10 +44,9 @@ bool BuyFromAuctionAction::Execute(Event /*event*/)
         return true;
     }
 
-    uint32 bought = BuyAtAuctioneer(auctioneer);
-    if (bought > 0)
-        LOG_INFO("playerbots", "ah/p4b: bot {} bought {} items from AH", bot->GetName(), bought);
-    return bought > 0;
+    // Opportunistic path — bot is already at an AH for unrelated reasons.
+    // PerformVisitAtAuctioneer sets cooldown + clears flag.
+    return PerformVisitAtAuctioneer(bot, auctioneer);
 }
 
 Creature* BuyFromAuctionAction::FindNearestAuctioneer()
