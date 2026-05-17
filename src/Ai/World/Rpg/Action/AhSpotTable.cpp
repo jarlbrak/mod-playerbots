@@ -66,7 +66,7 @@ AhSpot const& PickNearestAhSpot(Player* bot)
 {
     bool const alliance = bot->GetTeamId() == TEAM_ALLIANCE;
     AhSpot const* pool   = alliance ? kAhSpotsAlliance      : kAhSpotsHorde;
-    std::size_t   count  = alliance ? kAhSpotsAllianceCount : kAhSpotsHordeCount;
+    std::size_t const count = alliance ? kAhSpotsAllianceCount : kAhSpotsHordeCount;
 
     uint32 const botMap = bot->GetMapId();
     float  const bx     = bot->GetPositionX();
