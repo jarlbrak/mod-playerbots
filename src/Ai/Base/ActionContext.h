@@ -67,6 +67,7 @@
 #include "ListAtAuctionAction.h"
 #include "NewRpgAction.h"
 #include "NewRpgOutdoorPvP.h"
+#include "NewRpgGoAhVisitAction.h"
 #include "FishingAction.h"
 #include "CancelChannelAction.h"
 #include "WaitForAttackAction.h"
@@ -277,6 +278,7 @@ public:
         creators["new rpg do quest"] = &ActionContext::new_rpg_do_quest;
         creators["new rpg travel flight"] = &ActionContext::new_rpg_travel_flight;
         creators["new rpg outdoor pvp"] = &ActionContext::new_rpg_outdoor_pvp;
+        creators["new rpg go ah visit"] = &ActionContext::new_rpg_go_ah_visit;
         creators["list at auction"] = &ActionContext::list_at_auction;
         creators["buy from auction"] = &ActionContext::buy_from_auction;
         creators["wait for attack keep safe distance"] = &ActionContext::wait_for_attack_keep_safe_distance;
@@ -484,6 +486,7 @@ private:
     static Action* new_rpg_do_quest(PlayerbotAI* ai) { return new NewRpgDoQuestAction(ai); }
     static Action* new_rpg_travel_flight(PlayerbotAI* ai) { return new NewRpgTravelFlightAction(ai); }
     static Action* new_rpg_outdoor_pvp(PlayerbotAI* ai) { return new NewRpgOutdoorPvpAction(ai); }
+    static Action* new_rpg_go_ah_visit(PlayerbotAI* ai) { return new NewRpgGoAhVisitAction(ai); }
     static Action* list_at_auction(PlayerbotAI* ai) { return new ListAtAuctionAction(ai); }
     static Action* buy_from_auction(PlayerbotAI* ai) { return new BuyFromAuctionAction(ai); }
     static Action* wait_for_attack_keep_safe_distance(PlayerbotAI* ai) { return new WaitForAttackKeepSafeDistanceAction(ai); }

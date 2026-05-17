@@ -93,6 +93,17 @@ void NewRpgStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
             }
         )
     );
+    // F5 — direct-trigger drive for AH visits. Relevance 100 so it fires in
+    // minimal mode (no real player nearby), where the rest of the RPG status
+    // engine is blocked by Engine.cpp:462's minimal-mode filter.
+    triggers.push_back(
+        new TriggerNode(
+            "ah errand pending",
+            {
+                NextAction("new rpg go ah visit", 100.0f)
+            }
+        )
+    );
 }
 
 void NewRpgStrategy::InitMultipliers(std::vector<Multiplier*>&)

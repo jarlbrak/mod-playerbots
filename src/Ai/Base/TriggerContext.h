@@ -11,6 +11,7 @@
 #include "GenericTriggers.h"
 #include "GuildTriggers.h"
 #include "AhBuyerTrigger.h"
+#include "AhErrandPendingTrigger.h"
 #include "InventoryValueTrigger.h"
 #include "LfgTriggers.h"
 #include "LootTriggers.h"
@@ -239,6 +240,7 @@ public:
         creators["outdoor pvp status"] = &TriggerContext::outdoor_pvp_status;
         creators["inventory value"] = &TriggerContext::inventory_value;
         creators["ah buyer"] = &TriggerContext::ah_buyer;
+        creators["ah errand pending"] = &TriggerContext::ah_errand_pending;
         creators["can self resurrect"] = &TriggerContext::can_self_resurrect;
         creators["can fish"] = &TriggerContext::can_fish;
         creators["can use fishing bobber"] = &TriggerContext::can_use_fishing_bobber;
@@ -451,6 +453,7 @@ private:
     static Trigger* outdoor_pvp_status(PlayerbotAI* botAI) { return new NewRpgStatusTrigger(botAI, RPG_OUTDOOR_PVP); }
     static Trigger* inventory_value(PlayerbotAI* botAI) { return new InventoryValueTrigger(botAI); }
     static Trigger* ah_buyer(PlayerbotAI* botAI) { return new AhBuyerTrigger(botAI); }
+    static Trigger* ah_errand_pending(PlayerbotAI* botAI) { return new AhErrandPendingTrigger(botAI); }
     static Trigger* can_self_resurrect(PlayerbotAI* ai) { return new SelfResurrectTrigger(ai); }
     static Trigger* can_fish(PlayerbotAI* ai) { return new CanFishTrigger(ai); }
     static Trigger* can_use_fishing_bobber(PlayerbotAI* ai) { return new CanUseFishingBobberTrigger(ai); }
