@@ -149,6 +149,11 @@ bool NewRpgStatusUpdateAction::Execute(Event /*event*/)
             }
             break;
         }
+        case RPG_GO_AH_VISIT:
+            // NewRpgGoAhVisitAction owns its lifecycle (arrival → ChangeToIdle,
+            // stuck → ChangeToIdle after threshold). Status engine MUST NOT
+            // auto-transition out here, or travel would be killed mid-flight.
+            return false;
         default:
             break;
     }
