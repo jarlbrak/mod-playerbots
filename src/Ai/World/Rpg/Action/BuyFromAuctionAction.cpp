@@ -4,6 +4,7 @@
  */
 
 #include "BuyFromAuctionAction.h"
+#include "AhSpotTable.h"
 
 #include "AuctionHouseMgr.h"
 #include "DatabaseEnv.h"
@@ -12,16 +13,6 @@
 #include "PlayerbotAIConfig.h"
 #include "Playerbots.h"
 #include "ScriptMgr.h"
-
-// AH-spot table — shared shape with ListAtAuctionAction. Coords sit right next to the
-// auctioneer trio in each city so the bot is in range immediately on arrival.
-namespace {
-struct AhSpot { uint32 mapId; float x, y, z, o; };
-AhSpot const kAhSpotHorde    = { 1,  1683.0f, -4461.0f,  20.4f, 4.92f };
-AhSpot const kAhSpotAlliance = { 0, -8819.0f,   661.0f,  97.5f, 0.93f };
-uint32 const kAuctioneerEntriesAlliance[] = { 8670, 8719, 15659 };
-uint32 const kAuctioneerEntriesHorde[]    = { 8673, 8724, 9856  };
-} // namespace
 
 bool BuyFromAuctionAction::Execute(Event /*event*/)
 {
@@ -35,14 +26,14 @@ bool BuyFromAuctionAction::Execute(Event /*event*/)
     Creature* auctioneer = FindNearestAuctioneer();
     if (!auctioneer)
     {
-        AhSpot const& spot = (bot->GetTeamId() == TEAM_ALLIANCE) ? kAhSpotAlliance : kAhSpotHorde;
+        AhSpot const& spot = PickNearestAhSpot(bot);
         bool needRoute = (bot->GetMapId() != spot.mapId ||
                           bot->GetDistance(spot.x, spot.y, spot.z) > 30.0f);
         if (needRoute)
         {
             bool ok = bot->TeleportTo(spot.mapId, spot.x, spot.y, spot.z, spot.o);
-            LOG_INFO("playerbots", "ah/p4b: teleport bot {} -> map{} spot result={}",
-                     bot->GetName(), spot.mapId, ok);
+            LOG_INFO("playerbots", "ah/p4b: route bot {} -> {} (map{}) result={}",
+                     bot->GetName(), spot.label, spot.mapId, ok);
         }
         return true;
     }
@@ -64,11 +55,8 @@ bool BuyFromAuctionAction::Execute(Event /*event*/)
 
 Creature* BuyFromAuctionAction::FindNearestAuctioneer()
 {
-    bool alliance = bot->GetTeamId() == TEAM_ALLIANCE;
-    uint32 const* entries = alliance ? kAuctioneerEntriesAlliance : kAuctioneerEntriesHorde;
-    size_t const count = alliance
-        ? sizeof(kAuctioneerEntriesAlliance) / sizeof(uint32)
-        : sizeof(kAuctioneerEntriesHorde)    / sizeof(uint32);
+    uint32 const* entries = kAuctioneerEntries;
+    size_t const  count   = kAuctioneerEntriesCount;
 
     Creature* best = nullptr;
     float bestDist = 100.0f;
