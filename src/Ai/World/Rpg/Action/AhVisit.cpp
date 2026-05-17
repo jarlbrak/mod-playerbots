@@ -66,6 +66,13 @@ bool PerformVisitAtAuctioneer(Player* bot, Creature* auctioneer)
     if (!botAI)
         return false;
 
+    // Cooldown gate. A bot lingering at an auctioneer post-visit will
+    // re-fire InventoryValueTrigger / AhBuyerTrigger every 5-30s; without
+    // this check, every such fire would complete another visit and refresh
+    // the timestamp. Refuse and leave state untouched.
+    if (AhCooldownActive(bot))
+        return false;
+
     uint32 listed = 0;
     uint32 bought = 0;
     if (sPlayerbotAIConfig.ahListingEnabled)
