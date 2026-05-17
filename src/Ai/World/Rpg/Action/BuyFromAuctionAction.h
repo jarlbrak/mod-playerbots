@@ -19,7 +19,6 @@ public:
 
 private:
     Creature* FindNearestAuctioneer();
-    uint32 BuyAtAuctioneer(Creature* auctioneer);
 };
 
 #endif
