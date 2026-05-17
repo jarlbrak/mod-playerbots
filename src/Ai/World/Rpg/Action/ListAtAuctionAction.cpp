@@ -4,6 +4,7 @@
  */
 
 #include "ListAtAuctionAction.h"
+#include "AhSpotTable.h"
 
 #include "AuctionHouseMgr.h"
 #include "DatabaseEnv.h"
@@ -13,17 +14,6 @@
 #include "PlayerbotAIConfig.h"
 #include "Playerbots.h"
 #include "World.h"
-
-// Faction-default auction-house spot. Coords sit right next to the auctioneer trio in each city.
-// Bots that fire InventoryValueTrigger outside an existing auctioneer's range get teleported here.
-struct AhSpot { uint32 mapId; float x, y, z, o; };
-static AhSpot const kAhSpotHorde     = { 1,  1683.0f, -4461.0f,  20.4f, 4.92f }; // Org Drag, between Wabang/Thathung/Grimful
-static AhSpot const kAhSpotAlliance  = { 0, -8819.0f,   661.0f,  97.5f, 0.93f }; // SW Trade District, between Chilton/Fitch/Jaxon
-
-// Known auctioneer creature entries — used by FindNearestAuctioneer for a direct grid lookup
-// instead of the (post-teleport) stale "nearest npcs" AI_VALUE cache.
-static uint32 const kAuctioneerEntriesAlliance[] = { 8670, 8719, 15659 };
-static uint32 const kAuctioneerEntriesHorde[]    = { 8673, 8724, 9856  };
 
 bool ListAtAuctionAction::Execute(Event /*event*/)
 {
@@ -37,14 +27,14 @@ bool ListAtAuctionAction::Execute(Event /*event*/)
     Creature* auctioneer = FindNearestAuctioneer();
     if (!auctioneer)
     {
-        AhSpot const& spot = (bot->GetTeamId() == TEAM_ALLIANCE) ? kAhSpotAlliance : kAhSpotHorde;
+        AhSpot const& spot = PickNearestAhSpot(bot);
         bool needRoute = (bot->GetMapId() != spot.mapId ||
                           bot->GetDistance(spot.x, spot.y, spot.z) > 30.0f);
         if (needRoute)
         {
             bool ok = bot->TeleportTo(spot.mapId, spot.x, spot.y, spot.z, spot.o);
-            LOG_INFO("playerbots", "ah/p4: teleport bot {} -> map{} spot result={}",
-                     bot->GetName(), spot.mapId, ok);
+            LOG_INFO("playerbots", "ah/p4: route bot {} -> {} (map{}) result={}",
+                     bot->GetName(), spot.label, spot.mapId, ok);
         }
         return true;
     }
@@ -68,11 +58,8 @@ Creature* ListAtAuctionAction::FindNearestAuctioneer()
 {
     // Direct grid lookup via bot->FindNearestCreature avoids the "nearest npcs"
     // AI_VALUE cache, which goes stale right after a teleport.
-    bool alliance = bot->GetTeamId() == TEAM_ALLIANCE;
-    uint32 const* entries = alliance ? kAuctioneerEntriesAlliance : kAuctioneerEntriesHorde;
-    size_t const count = alliance
-        ? sizeof(kAuctioneerEntriesAlliance) / sizeof(uint32)
-        : sizeof(kAuctioneerEntriesHorde)    / sizeof(uint32);
+    uint32 const* entries = kAuctioneerEntries;
+    size_t const  count   = kAuctioneerEntriesCount;
 
     Creature* best = nullptr;
     float bestDist = 100.0f;
