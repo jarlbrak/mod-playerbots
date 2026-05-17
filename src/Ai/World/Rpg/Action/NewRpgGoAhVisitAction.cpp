@@ -59,7 +59,12 @@ bool NewRpgGoAhVisitAction::Execute(Event /*event*/)
         // Try a small nudge to unstick; if persistent stuck, bail to IDLE.
         if (botAI->rpgInfo.stuckAttempts >= 5)
         {
-            LOG_INFO("playerbots", "ah/visit: bot {} stuck en route to {} — bailing to IDLE",
+            // Honor the 2h cooldown on the bail path too — otherwise a bot
+            // stuck on the way to one AH would re-pick a destination on the
+            // very next status cycle and burn ticks looping.
+            botAI->lastAhVisitMs = getMSTime();
+            botAI->ahErrandPending = false;
+            LOG_INFO("playerbots", "ah/visit: bot {} stuck en route to {} — bailing to IDLE + 2h cooldown",
                      bot->GetName(), data->cityLabel ? data->cityLabel : "<null>");
             info.ChangeToIdle();
             return true;
