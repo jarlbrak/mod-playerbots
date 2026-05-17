@@ -98,3 +98,12 @@ AhSpot const& PickNearestAhSpot(Player* bot)
     // so this path is effectively dead code today.
     return pool[0];
 }
+
+bool HearthBindMatchesSpot(Player const* bot, AhSpot const& spot)
+{
+    if (bot->m_homebindMapId != spot.mapId)
+        return false;
+    float const dx = bot->m_homebindX - spot.x;
+    float const dy = bot->m_homebindY - spot.y;
+    return (dx * dx + dy * dy) <= (500.0f * 500.0f);
+}

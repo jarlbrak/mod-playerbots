@@ -27,7 +27,7 @@ bool NewRpgGoAhVisitAction::Execute(Event /*event*/)
     {
         AhSpot const& spot = PickNearestAhSpot(bot);
         WorldPosition pos(spot.mapId, spot.x, spot.y, spot.z, spot.o);
-        info.ChangeToGoAhVisit(pos, spot.label);
+        info.ChangeToGoAhVisit(pos, spot.label, &spot);
         LOG_INFO("playerbots", "ah/visit: bot {} starting trip to {} (map{})",
                  bot->GetName(), spot.label, spot.mapId);
         // Fall through to the travel branch below.
@@ -39,6 +39,34 @@ bool NewRpgGoAhVisitAction::Execute(Event /*event*/)
         // Defensive — should be unreachable after the transition above.
         info.ChangeToIdle();
         return false;
+    }
+
+    // Hearthstone shortcut: if the bot's bind is at (or within 500yd of) the
+    // chosen AH spot AND the stone is off cooldown / in bags, hearth instead
+    // of running MoveFarTo. One-shot per trip — if the cast is interrupted,
+    // hearthAttempted stays true and the bot falls through to MoveFarTo on
+    // the next tick. Combat / transport / BG / dungeon are refused at the
+    // top of Execute, so we don't re-check them here.
+    if (!data->hearthAttempted)
+    {
+        data->hearthAttempted = true;
+        if (data->spot
+            && HearthBindMatchesSpot(bot, *data->spot)
+            && bot->HasItemCount(6948, 1, false)
+            && !bot->HasSpellCooldown(8690)
+            && !bot->IsNonMeleeSpellCast(false)
+            && !bot->IsBeingTeleported())
+        {
+            if (botAI->DoSpecificAction("hearthstone"))
+            {
+                LOG_INFO("playerbots", "ah/visit: bot {} hearthing to {}",
+                         bot->GetName(),
+                         data->cityLabel ? data->cityLabel : "<null>");
+                return true;
+            }
+        }
+        // Fall through to MoveFarTo on any failure (no hearth, on cooldown,
+        // DoSpecificAction returned false, etc.)
     }
 
     // Travel — use the existing MoveFarTo primitive (pathfinding + flight

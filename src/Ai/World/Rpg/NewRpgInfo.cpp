@@ -67,12 +67,15 @@ void NewRpgInfo::ChangeToIdle()
     data = Idle{};
 }
 
-void NewRpgInfo::ChangeToGoAhVisit(WorldPosition pos, char const* cityLabel)
+void NewRpgInfo::ChangeToGoAhVisit(WorldPosition pos, char const* cityLabel, AhSpot const* spot)
 {
     startT = getMSTime();
     GoAhVisit visit;
     visit.pos = pos;
     visit.cityLabel = cityLabel;
+    visit.spot = spot;
+    // hearthAttempted defaults to false; reassigning the variant resets it
+    // implicitly each trip.
     data = visit;
 }
 

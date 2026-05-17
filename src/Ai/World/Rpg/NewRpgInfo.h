@@ -9,6 +9,9 @@
 #include "Timer.h"
 #include "TravelMgr.h"
 
+struct AhSpot;  // fwd-decl; full definition in AhSpotTable.h. Only a const* is
+                // stored in GoAhVisit so we don't need the full type here.
+
 using NewRpgStatusTransitionProb = std::vector<std::vector<int>>;
 
 struct NewRpgInfo
@@ -66,8 +69,12 @@ struct NewRpgInfo
     // RPG_GO_AH_VISIT
     struct GoAhVisit
     {
-        WorldPosition pos{};        // AhSpot coord chosen at status entry
-        char const*   cityLabel{};  // static-storage label for logs
+        WorldPosition pos{};            // AhSpot coord chosen at status entry
+        char const*   cityLabel{};      // static-storage label for logs
+        AhSpot const* spot{nullptr};    // Source AhSpot (static lifetime, safe raw ptr).
+                                        // Lets the action re-derive without re-picking.
+        bool          hearthAttempted{false};  // One-shot per trip: prevents
+                                               // re-casting after an interrupted hearth.
     };
     struct Idle
     {
@@ -107,7 +114,7 @@ struct NewRpgInfo
     void ChangeToOutdoorPvp(ObjectGuid::LowType capturePointSpawnId = 0);
     void ChangeToRest();
     void ChangeToIdle();
-    void ChangeToGoAhVisit(WorldPosition pos, char const* cityLabel);
+    void ChangeToGoAhVisit(WorldPosition pos, char const* cityLabel, AhSpot const* spot);
     bool CanChangeTo(NewRpgStatus status);
     void Reset();
     void SetMoveFarTo(WorldPosition pos);
