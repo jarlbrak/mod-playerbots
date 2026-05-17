@@ -52,9 +52,11 @@ Creature* FindNearestAuctioneerNearBot(Player* bot)
     return best;
 }
 
-// Forward declarations of internal helpers (filled in Steps 3 and 4).
-static uint32 PerformListingAt(Player* bot, Creature* auctioneer);
-static uint32 PerformBuyingAt(Player* bot, Creature* auctioneer);
+// Internal helpers — defined below PerformVisitAtAuctioneer.
+// auctioneer parameter is accepted for API symmetry with PerformVisitAtAuctioneer
+// but unused: both bodies talk directly to the Neutral auction house via sAuctionMgr.
+static uint32 PerformListingAt(Player* bot, Creature* /*auctioneer*/);
+static uint32 PerformBuyingAt(Player* bot, Creature* /*auctioneer*/);
 
 bool PerformVisitAtAuctioneer(Player* bot, Creature* auctioneer)
 {
@@ -84,12 +86,12 @@ bool PerformVisitAtAuctioneer(Player* bot, Creature* auctioneer)
     return false;
 }
 
-static uint32 PerformListingAt(Player* bot, Creature* auctioneer)
+static uint32 PerformListingAt(Player* bot, Creature* /*auctioneer*/)
 {
     PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
     if (!botAI)
         return 0;
-    AiObjectContext* context = botAI->GetAiObjectContext();
+    AiObjectContext* context = botAI->GetAiObjectContext();  // required by AI_VALUE2 macro
 
     // === BODY COPIED VERBATIM FROM ListAtAuctionAction::ListItemsAt ===
     // Unified single AH — Alliance, Horde, and Neutral auctioneers all post into
@@ -198,12 +200,12 @@ static uint32 PerformListingAt(Player* bot, Creature* auctioneer)
     return listed;
 }
 
-static uint32 PerformBuyingAt(Player* bot, Creature* auctioneer)
+static uint32 PerformBuyingAt(Player* bot, Creature* /*auctioneer*/)
 {
     PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
     if (!botAI)
         return 0;
-    AiObjectContext* context = botAI->GetAiObjectContext();
+    AiObjectContext* context = botAI->GetAiObjectContext();  // required by AI_VALUE2 macro
 
     // === BODY COPIED VERBATIM FROM BuyFromAuctionAction::BuyAtAuctioneer ===
     // Unified single AH — read from the same Neutral house regardless of which
