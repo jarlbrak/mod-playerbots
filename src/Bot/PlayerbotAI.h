@@ -604,6 +604,13 @@ public:
     std::unordered_set<uint32> lowPriorityQuest;
     time_t bgReleaseAttemptTime = 0;
 
+    // F5 — AH visit gating. Set by inventory_value / ah_buyer triggers when
+    // bot has work to do at AH but no auctioneer is in range. Read by the
+    // ah_errand_pending trigger which then fires NewRpgGoAhVisitAction.
+    // Cleared (and lastAhVisitMs set) by PerformVisitAtAuctioneer.
+    bool   ahErrandPending = false;
+    uint32 lastAhVisitMs   = 0;
+
     // Schedules a callback to run once after <delayMs> milliseconds.
     void AddTimedEvent(std::function<void()> callback, uint32 delayMs);
 
