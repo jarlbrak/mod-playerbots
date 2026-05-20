@@ -87,6 +87,22 @@ class UpdateResponse(BaseModel):
     re_embedded: bool
 
 
+class MemoryRow(BaseModel):
+    id:               str
+    bot_id:           str
+    text:             str
+    salience:         float
+    memory_type:      str
+    source:           str | None
+    created_ts:       int
+    last_recalled_ts: int
+
+
+class ListResponse(BaseModel):
+    items: list[MemoryRow]
+    total: int
+
+
 def build_router(state: dict[str, Any]) -> APIRouter:
     router = APIRouter()
 
@@ -266,6 +282,71 @@ def build_router(state: dict[str, Any]) -> APIRouter:
             )
         conn.commit()
         return RecallAboutResponse(hints=[text for _, _, text in top])
+
+    @router.get("/memory/list", response_model=ListResponse)
+    async def list_memories(
+        bot_id: str,
+        memory_type: str | None = None,
+        source: str | None = None,
+        since_ts: int | None = None,
+        until_ts: int | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ):
+        limit = max(1, min(500, limit))
+        offset = max(0, offset)
+        conn = state["conn"]
+        where = ["bot_id=?"]
+        params: list[Any] = [bot_id]
+        if memory_type is not None:
+            where.append("memory_type=?"); params.append(memory_type)
+        if source is not None:
+            where.append("source=?"); params.append(source)
+        if since_ts is not None:
+            where.append("created_ts>=?"); params.append(since_ts)
+        if until_ts is not None:
+            where.append("created_ts<=?"); params.append(until_ts)
+        where_sql = " AND ".join(where)
+
+        cur = conn.execute(
+            f"SELECT COUNT(*) FROM memories WHERE {where_sql}", tuple(params)
+        )
+        total = cur.fetchone()[0]
+
+        cur = conn.execute(
+            f"SELECT id, bot_id, text, salience, memory_type, source, "
+            f"       created_ts, last_recalled_ts "
+            f"FROM memories WHERE {where_sql} "
+            f"ORDER BY created_ts DESC LIMIT ? OFFSET ?",
+            tuple(params) + (limit, offset),
+        )
+        items = [
+            MemoryRow(
+                id=r[0], bot_id=r[1], text=r[2], salience=r[3],
+                memory_type=r[4], source=r[5], created_ts=r[6],
+                last_recalled_ts=r[7],
+            )
+            for r in cur.fetchall()
+        ]
+        return ListResponse(items=items, total=total)
+
+    @router.get("/memory/{memory_id}", response_model=MemoryRow)
+    async def get_memory(memory_id: str, bot_id: str):
+        conn = state["conn"]
+        cur = conn.execute(
+            "SELECT id, bot_id, text, salience, memory_type, source, "
+            "       created_ts, last_recalled_ts "
+            "FROM memories WHERE id=? AND bot_id=?",
+            (memory_id, bot_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="memory not found")
+        return MemoryRow(
+            id=row[0], bot_id=row[1], text=row[2], salience=row[3],
+            memory_type=row[4], source=row[5], created_ts=row[6],
+            last_recalled_ts=row[7],
+        )
 
     @router.put("/memory/update", response_model=UpdateResponse)
     async def update(req: UpdateRequest):
