@@ -182,3 +182,61 @@ def test_goals_insert_works(temp_db_with_v02_migrations):
     )
     cur = conn.execute("SELECT status, text FROM goals WHERE id='g_test1'")
     assert cur.fetchone() == ("pending", "grind to 15")
+
+
+def test_fts5_table_exists(temp_db_with_v02_migrations):
+    cur = temp_db_with_v02_migrations.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='memories_fts'"
+    )
+    assert cur.fetchone() is not None
+
+
+def test_fts5_triggers_exist(temp_db_with_v02_migrations):
+    cur = temp_db_with_v02_migrations.execute(
+        "SELECT name FROM sqlite_master WHERE type='trigger' "
+        "AND tbl_name='memories' ORDER BY name"
+    )
+    names = [row[0] for row in cur.fetchall()]
+    assert "memories_fts_insert" in names
+    assert "memories_fts_delete" in names
+    assert "memories_fts_update" in names
+
+
+def test_fts5_keeps_in_sync_on_insert(temp_db_with_v02_migrations):
+    conn = temp_db_with_v02_migrations
+    import time
+    now = int(time.time())
+    conn.execute("INSERT INTO bots (bot_id, created_ts) VALUES ('b1', ?)", (now,))
+    conn.execute(
+        "INSERT INTO memories (id, bot_id, text, salience, created_ts, "
+        "last_recalled_ts) VALUES ('m1', 'b1', 'alice loves mounts', 0.5, ?, ?)",
+        (now, now),
+    )
+    conn.commit()
+    cur = conn.execute(
+        "SELECT rowid FROM memories_fts WHERE memories_fts MATCH 'mounts'"
+    )
+    assert cur.fetchone() is not None
+
+
+def test_fts5_keeps_in_sync_on_delete(temp_db_with_v02_migrations):
+    conn = temp_db_with_v02_migrations
+    import time
+    now = int(time.time())
+    conn.execute("INSERT INTO bots (bot_id, created_ts) VALUES ('b1', ?)", (now,))
+    conn.execute(
+        "INSERT INTO memories (id, bot_id, text, salience, created_ts, "
+        "last_recalled_ts) VALUES ('m1', 'b1', 'unique_token_xyz', 0.5, ?, ?)",
+        (now, now),
+    )
+    conn.commit()
+    cur = conn.execute(
+        "SELECT rowid FROM memories_fts WHERE memories_fts MATCH 'unique_token_xyz'"
+    )
+    assert cur.fetchone() is not None
+    conn.execute("DELETE FROM memories WHERE id='m1'")
+    conn.commit()
+    cur = conn.execute(
+        "SELECT rowid FROM memories_fts WHERE memories_fts MATCH 'unique_token_xyz'"
+    )
+    assert cur.fetchone() is None
