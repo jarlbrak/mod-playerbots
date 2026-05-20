@@ -62,6 +62,30 @@ def create_app(embedder: Optional[Any] = None) -> FastAPI:
     app = FastAPI(lifespan=lifespan, title="memory-sidecar")
     app.state.mem = state
 
+    import json
+    import time as _time
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    class JsonLogMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            start = _time.time()
+            response = await call_next(request)
+            latency_ms = int((_time.time() - start) * 1000)
+            bot_id = request.query_params.get("bot_id") if request.query_params else None
+            log = {
+                "ts": round(_time.time(), 3),
+                "route": request.url.path,
+                "transport": "http",
+                "method": request.method,
+                "status": response.status_code,
+                "latency_ms": latency_ms,
+                "bot_id": bot_id,
+            }
+            print(json.dumps(log), flush=True)
+            return response
+
+    app.add_middleware(JsonLogMiddleware)
+
     @app.get("/health")
     async def health():
         return {"ok": True}
