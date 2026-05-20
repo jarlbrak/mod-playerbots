@@ -93,7 +93,7 @@ def test_search_p95_under_500ms():
                 })
                 r.raise_for_status()
                 latencies.append((time.perf_counter() - t) * 1000)
-                items = r.json()["result"]["items"]
+                items = r.json()["items"]
                 if any(it["signals"]["bm25_rank"] is not None for it in items):
                     bm25_hits += 1
             p95 = _p95(latencies)
@@ -109,7 +109,7 @@ def test_search_p95_under_500ms():
         with _client() as c:
             c.headers["Authorization"] = f"Bearer {TOKEN}"
             listed = c.get(f"/memory/list?bot_id={bot}&limit=10000")
-            for m in listed.json()["result"]["items"]:
+            for m in listed.json()["items"]:
                 c.post("/memory/forget", json={"bot_id": bot, "memory_id": m["id"]})
 
 
@@ -135,5 +135,5 @@ def test_recall_p95_under_300ms():
         with _client() as c:
             c.headers["Authorization"] = f"Bearer {TOKEN}"
             listed = c.get(f"/memory/list?bot_id={bot}&limit=10000")
-            for m in listed.json()["result"]["items"]:
+            for m in listed.json()["items"]:
                 c.post("/memory/forget", json={"bot_id": bot, "memory_id": m["id"]})
