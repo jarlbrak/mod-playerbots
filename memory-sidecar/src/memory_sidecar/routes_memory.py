@@ -213,28 +213,22 @@ def build_router(state: dict[str, Any]) -> APIRouter:
         embedder = state["embedder"]
         q_emb = await embedder.embed(req.query)
 
-        # KNN against vec_memories (over-fetch for MMR + filters)
         over_fetch = max(req.top_k * 4, 20)
         extra_where = _extra_where_clause(req)
         extra_params = _extra_params(req)
-        # NEW (sqlite-vec KNN via MATCH; pushes work into vec0 index)
-        # We over-fetch from KNN, then filter by bot_id + extras at the JOIN.
-        # sqlite-vec v0.1.9 caps k at 4096; clamp to that limit.
-        knn_k = min(over_fetch * 50, 4096)  # over-fetch generously across all bots; JOIN filters down
+
+        # Per-bot Python scoring. sqlite-vec v0.1.9 has no ANN index,
+        # so vec0 MATCH does brute-force cosine over ALL 1M rows
+        # (~2.3s). Scoping to the bot's own memories (~2000 rows max
+        # via cap_per_bot) using the idx_memories_bot index reads
+        # ~3MB of embeddings and scores them in Python in ~5-15ms.
+        # The audit's MATCH-engages-ANN assumption was wrong; this
+        # is the v0.1 pattern that already proved ~27ms in prod.
         cur = conn.execute(
-            "WITH knn AS ("
-            "    SELECT memory_id, distance "
-            "    FROM vec_memories "
-            "    WHERE embedding MATCH ? AND k = ?"
-            ") "
-            "SELECT m.id, m.text, m.salience, m.created_ts, "
-            "       m.last_recalled_ts, m.embedding "
-            "FROM knn "
-            "JOIN memories m ON m.id = knn.memory_id "
-            f"WHERE m.bot_id = ? {extra_where} "
-            "ORDER BY knn.distance ASC "
-            "LIMIT ?",
-            (embedding_to_blob(q_emb), knn_k, req.bot_id) + extra_params + (over_fetch,),
+            "SELECT id, text, salience, created_ts, last_recalled_ts, embedding "
+            f"FROM memories WHERE bot_id = ? {extra_where} "
+            "ORDER BY created_ts DESC",
+            (req.bot_id,) + extra_params,
         )
         rows = cur.fetchall()
         if not rows:
@@ -389,22 +383,35 @@ def build_router(state: dict[str, Any]) -> APIRouter:
         else:
             bm25 = []
 
-        # 2. Dense via vec_memories KNN (sqlite-vec MATCH syntax)
-        # sqlite-vec v0.1.9 caps k at 4096; clamp to that limit.
-        knn_k = min(over_fetch * 50, 4096)
+        # 2. Dense via per-bot Python cosine scoring.
+        # sqlite-vec v0.1.9 has no ANN index — vec0 MATCH does brute-
+        # force cosine over ALL ~1M rows (~2.3s). The per-bot index
+        # on `memories(bot_id)` reads ~2000 embeddings (3MB) and
+        # scores in Python in ~5-15ms. Matches the audit's observed
+        # 27ms on the legacy recall() path before the v0.2 "fix".
         cur = conn.execute(
-            "WITH knn AS ("
-            "    SELECT memory_id, distance "
-            "    FROM vec_memories "
-            "    WHERE embedding MATCH ? AND k = ?"
-            ") "
-            "SELECT knn.memory_id FROM knn "
-            "JOIN memories m ON m.id = knn.memory_id "
+            "SELECT m.id, m.embedding FROM memories m "
             f"WHERE m.bot_id = ? {extra_alias_where} "
-            "ORDER BY knn.distance ASC LIMIT ?",
-            (embedding_to_blob(q_emb), knn_k, req.bot_id) + extra_alias_params + (over_fetch,),
+            "ORDER BY m.created_ts DESC",
+            (req.bot_id,) + extra_alias_params,
         )
-        dense = [r[0] for r in cur.fetchall()]
+        dense_scored: list[tuple[float, str]] = []
+        for mid, emb_blob in cur.fetchall():
+            if not emb_blob:
+                continue
+            emb = np.frombuffer(emb_blob, dtype=np.float32)
+            # Cosine sim — bge-small-en-v1.5 emits L2-normalized vectors
+            # so this is effectively a dot product. linalg.norm guards
+            # against any drift.
+            na = float(np.linalg.norm(emb))
+            nb = float(np.linalg.norm(q_emb))
+            if na == 0.0 or nb == 0.0:
+                sim = 0.0
+            else:
+                sim = float(np.dot(emb, q_emb) / (na * nb))
+            dense_scored.append((sim, mid))
+        dense_scored.sort(reverse=True, key=lambda t: t[0])
+        dense = [mid for _, mid in dense_scored[:over_fetch]]
 
         # 3. Entity via BFS — light heuristic: find any entity name appearing in query
         cur = conn.execute(
