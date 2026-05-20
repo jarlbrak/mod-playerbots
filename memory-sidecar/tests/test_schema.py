@@ -119,3 +119,20 @@ def test_memory_type_default_is_event(temp_db_with_v02_migrations):
     row = cur.fetchone()
     assert row[0] == "event"
     assert row[1] is None
+
+
+def test_entities_has_type_column(temp_db_with_v02_migrations):
+    cur = temp_db_with_v02_migrations.execute("PRAGMA table_info(entities)")
+    cols = {row[1]: row[2] for row in cur.fetchall()}
+    assert "type" in cols
+    assert cols["type"] == "TEXT"
+
+
+def test_entity_type_can_be_set(temp_db_with_v02_migrations):
+    conn = temp_db_with_v02_migrations
+    conn.execute(
+        "INSERT INTO entities (bot_id, name_lower, display_name, type) "
+        "VALUES ('b1', 'alice', 'Alice', 'player')"
+    )
+    cur = conn.execute("SELECT type FROM entities WHERE display_name='Alice'")
+    assert cur.fetchone()[0] == "player"
