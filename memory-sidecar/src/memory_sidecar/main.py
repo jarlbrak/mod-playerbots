@@ -1,99 +1,19 @@
-"""FastAPI app for the memory sidecar."""
-import base64
+"""FastAPI app factory for the memory sidecar."""
 import os
-import time
-import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Optional
 
-import numpy as np
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import FastAPI
 
-from memory_sidecar.db import open_db, run_migrations
+from memory_sidecar.db import open_db, run_migrations as run_legacy_migrations
 from memory_sidecar.embed import EmbeddingClient
-from memory_sidecar.recall import Memory, ScoringWeights, score_memory
+from memory_sidecar.migrations import apply_migrations
+from memory_sidecar.recall import ScoringWeights
+from memory_sidecar import routes_memory, routes_personality, routes_goals
+from memory_sidecar.mcp_auth import TokenStore
+from memory_sidecar.mcp_server import build_mcp_server
 
-
-# ---- Request / response models ----
-
-class RememberRel(BaseModel):
-    src: str
-    rel: str
-    dst: str
-
-
-class RememberRequest(BaseModel):
-    bot_id: str
-    text: str
-    entities: list[str] = Field(default_factory=list)
-    salience: float
-    relations: list[RememberRel] = Field(default_factory=list)
-
-
-class RememberResponse(BaseModel):
-    memory_id: str
-    evicted: int
-
-
-class ForgetRequest(BaseModel):
-    bot_id: str
-    memory_id: str
-
-
-class ForgetResponse(BaseModel):
-    forgotten: bool
-
-
-class RecallRequest(BaseModel):
-    bot_id: str
-    query: str
-    top_k: int = 5
-
-
-class RecalledMemory(BaseModel):
-    memory_id: str
-    text: str
-    score: float
-    ts: int
-
-
-class RecallResponse(BaseModel):
-    memories: list[RecalledMemory]
-
-
-class RecallAboutRequest(BaseModel):
-    bot_id: str
-    entity: str
-    max_hops: int = 2
-    top_k: int = 3
-
-
-class RecallAboutResponse(BaseModel):
-    hints: list[str]
-
-
-class PersonalityGetRequest(BaseModel):
-    bot_id: str
-
-
-class PersonalityGetResponse(BaseModel):
-    persona: str
-
-
-class PersonalitySetRequest(BaseModel):
-    bot_id: str
-    persona: str
-
-
-class PersonalitySetResponse(BaseModel):
-    ok: bool
-
-
-PERSONA_MAX_CHARS = 4000
-
-
-# ---- App factory ----
 
 def create_app(embedder: Optional[Any] = None) -> FastAPI:
     db_path = os.environ.get("MEM_DB_PATH", "/var/memory/db.sqlite")
@@ -111,287 +31,148 @@ def create_app(embedder: Optional[Any] = None) -> FastAPI:
             w_imp=float(os.environ.get("MEM_W_IMP", "0.3")),
             tau_seconds=int(os.environ.get("MEM_TAU_SECONDS", "604800")),
         ),
+        "recency_basis": os.environ.get("MEM_W_REC_TIMESTAMP", "created"),
+        "mmr_lambda": float(os.environ.get("MEM_MMR_LAMBDA", "0.7")),
     }
+
+    # Deferred-init holder for the MCP server. The lifespan checks this at
+    # call time; if populated by the MCP build block below, the lifespan
+    # wraps yield with `session_manager.run()` so the streamable-HTTP
+    # transport's session manager is alive for the duration of the app.
+    # Mirrors the harness-daemon pattern (kb_642162c3 app.py:240-258).
+    mcp_holder: dict[str, Any] = {}
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         conn = open_db(state["db_path"])
-        run_migrations(conn)
+        # Legacy idempotent baseline (every CREATE has IF NOT EXISTS).
+        # Safe to run on existing prod DB.
+        run_legacy_migrations(conn)
+        # New versioned migrations (0001 is the same baseline, so it
+        # becomes a no-op on prod DBs already at-schema; just inserts
+        # the schema_version=1 row).
+        migrations_dir = os.environ.get(
+            "MEM_MIGRATIONS_DIR",
+            str(Path(__file__).resolve().parent.parent.parent / "migrations"),
+        )
+        n = apply_migrations(conn, migrations_dir)
+        if n:
+            print(f"[migrations] applied {n} migration(s); schema_version now updated")
         state["conn"] = conn
         if state["embedder"] is None:
             state["embedder"] = EmbeddingClient(state["embed_endpoint"], dim=384)
-        yield
-        conn.close()
-        if hasattr(state["embedder"], "aclose"):
-            await state["embedder"].aclose()
+        try:
+            mcp_server = mcp_holder.get("mcp_server")
+            if mcp_server is not None:
+                # FastMCP's streamable-HTTP transport requires its session
+                # manager to be running for the duration of the app.
+                async with mcp_server.session_manager.run():
+                    yield
+            else:
+                yield
+        finally:
+            conn.close()
+            if hasattr(state["embedder"], "aclose"):
+                await state["embedder"].aclose()
 
     app = FastAPI(lifespan=lifespan, title="memory-sidecar")
     app.state.mem = state
-    _register_routes(app, state)
-    return app
 
+    import json
+    import time as _time
+    from starlette.middleware.base import BaseHTTPMiddleware
 
-def _generate_memory_id() -> str:
-    """Short base32 prefix of uuid7 (16 random bytes → 11 base32 chars)."""
-    raw = uuid.uuid4().bytes
-    b32 = base64.b32encode(raw).decode("ascii").rstrip("=").lower()
-    return f"m_{b32[:11]}"
+    class JsonLogMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            start = _time.time()
+            response = await call_next(request)
+            latency_ms = int((_time.time() - start) * 1000)
+            bot_id = request.query_params.get("bot_id") if request.query_params else None
+            log = {
+                "ts": round(_time.time(), 3),
+                "route": request.url.path,
+                "transport": "http",
+                "method": request.method,
+                "status": response.status_code,
+                "latency_ms": latency_ms,
+                "bot_id": bot_id,
+            }
+            print(json.dumps(log), flush=True)
+            return response
 
-
-def _upsert_entity(conn, bot_id: str, name: str) -> int:
-    lower = name.lower()
-    cur = conn.execute(
-        "SELECT id FROM entities WHERE bot_id=? AND name_lower=?", (bot_id, lower)
-    )
-    row = cur.fetchone()
-    if row:
-        return row[0]
-    cur = conn.execute(
-        "INSERT INTO entities (bot_id, name_lower, display_name, type) "
-        "VALUES (?, ?, ?, NULL)",
-        (bot_id, lower, name),
-    )
-    return cur.lastrowid
-
-
-def _embedding_to_blob(vec: np.ndarray) -> bytes:
-    return vec.astype(np.float32).tobytes()
-
-
-def _evict_if_over_cap(conn, bot_id: str, cap: int, now: int, w: ScoringWeights) -> int:
-    cur = conn.execute(
-        "SELECT id, salience, last_recalled_ts FROM memories WHERE bot_id=?",
-        (bot_id,),
-    )
-    rows = cur.fetchall()
-    if len(rows) <= cap:
-        return 0
-
-    import math
-    def score(row):
-        age = max(0, now - row[2])
-        return row[1] * math.exp(-age / w.tau_seconds)
-
-    rows_sorted = sorted(rows, key=score)
-    n_evict = len(rows) - cap
-    to_evict = [r[0] for r in rows_sorted[:n_evict]]
-    for mid in to_evict:
-        conn.execute("DELETE FROM memories WHERE id=?", (mid,))
-        conn.execute("DELETE FROM vec_memories WHERE memory_id=?", (mid,))
-        conn.execute("DELETE FROM memory_entities WHERE memory_id=?", (mid,))
-    return n_evict
-
-
-def _register_routes(app: FastAPI, state: dict[str, Any]) -> None:
+    app.add_middleware(JsonLogMiddleware)
 
     @app.get("/health")
     async def health():
         return {"ok": True}
 
-    @app.post("/memory/remember", response_model=RememberResponse)
-    async def remember(req: RememberRequest):
-        salience = max(0.0, min(1.0, req.salience))
-        conn = state["conn"]
-        embedder = state["embedder"]
-        embedding = await embedder.embed(req.text)
-        memory_id = _generate_memory_id()
-        now = int(time.time())
+    app.include_router(routes_memory.build_router(state))
+    app.include_router(routes_personality.build_router(state))
+    app.include_router(routes_goals.build_router(state))
 
-        conn.execute(
-            "INSERT OR IGNORE INTO bots (bot_id, created_ts) VALUES (?, ?)",
-            (req.bot_id, now),
-        )
+    # Build the dispatcher map: tool_name -> async fn that takes pydantic args
+    # and returns the route's response. Routes must be mounted FIRST (above).
+    import memory_sidecar.routes_memory as rm
+    import memory_sidecar.routes_personality as rp
+    import memory_sidecar.routes_goals as rg
 
-        entity_ids: list[int] = [
-            _upsert_entity(conn, req.bot_id, name) for name in req.entities
+    # Look up route endpoints from the app.
+    endpoints: dict[str, Any] = {}
+    for route in app.routes:
+        if hasattr(route, "endpoint") and hasattr(route, "methods") and hasattr(route, "path"):
+            for m in (route.methods or set()):
+                endpoints[f"{m} {route.path}"] = route.endpoint
+
+    def _route(key):
+        return endpoints[key]
+
+    async def _post_body(req_cls, key, args):
+        return await _route(key)(req_cls(**args.model_dump()))
+
+    async def _get_kw(key, args):
+        return await _route(key)(**args.model_dump(exclude_none=True))
+
+    dispatchers = {
+        "memory.write":           lambda a: _post_body(rm.RememberRequest,      "POST /memory/remember", a),
+        "memory.read":            lambda a: _get_kw("GET /memory/{memory_id}", a),
+        "memory.update":          lambda a: _post_body(rm.UpdateRequest,         "PUT /memory/update", a),
+        "memory.delete":          lambda a: _post_body(rm.ForgetRequest,         "POST /memory/forget", a),
+        "memory.recall":          lambda a: _post_body(rm.RecallRequest,         "POST /memory/recall", a),
+        "memory.recall_about":    lambda a: _post_body(rm.RecallAboutRequest,    "POST /memory/recall_about", a),
+        "memory.search":          lambda a: _post_body(rm.SearchRequest,         "POST /memory/search", a),
+        "memory.list":            lambda a: _get_kw("GET /memory/list", a),
+        "memory.personality_get": lambda a: _post_body(rp.PersonalityGetRequest, "POST /memory/personality/get", a),
+        "memory.personality_set": lambda a: _post_body(rp.PersonalitySetRequest, "POST /memory/personality/set", a),
+        "goals.create":           lambda a: _post_body(rg.GoalCreateRequest,     "POST /goals/create", a),
+        "goals.read":             lambda a: _get_kw("GET /goals/{goal_id}", a),
+        "goals.update":           lambda a: _post_body(rg.GoalUpdateRequest,     "PUT /goals/update", a),
+        "goals.list":             lambda a: _get_kw("GET /goals/list", a),
+        "goals.complete":         lambda a: _post_body(rg.GoalCompleteRequest,   "POST /goals/complete", a),
+    }
+
+    token_path = os.environ.get("MEM_TOKEN_STORE", "/etc/memory/tokens.yaml")
+    if Path(token_path).exists():
+        token_store = TokenStore.load_yaml(token_path)
+        mcp_listen = os.environ.get("MEM_LISTEN_ADDR", "0.0.0.0:8090")
+        mcp_hosts = [
+            "127.0.0.1:*", "localhost:*", "192.168.1.3:*",
+            mcp_listen,
         ]
-
-        conn.execute(
-            "INSERT INTO memories (id, bot_id, text, salience, created_ts, "
-            "last_recalled_ts, embedding) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (memory_id, req.bot_id, req.text, salience, now, now,
-             _embedding_to_blob(embedding)),
+        resource_url = f"http://{mcp_listen}/mcp"
+        mcp_server = build_mcp_server(
+            token_store=token_store,
+            dispatchers=dispatchers,
+            allowed_hosts=mcp_hosts,
+            resource_url=resource_url,
         )
-        conn.execute(
-            "INSERT INTO vec_memories (memory_id, bot_id, embedding) VALUES (?, ?, ?)",
-            (memory_id, req.bot_id, _embedding_to_blob(embedding)),
-        )
-        for eid in entity_ids:
-            conn.execute(
-                "INSERT OR IGNORE INTO memory_entities (memory_id, entity_id) "
-                "VALUES (?, ?)",
-                (memory_id, eid),
-            )
+        # Call streamable_http_app() once so session_manager is accessible
+        # (FastMCP raises if accessed before this — kb_642162c3 §similar).
+        _streamable_app = mcp_server.streamable_http_app()
+        # Register with the lifespan holder so session_manager.run() wraps yield.
+        mcp_holder["mcp_server"] = mcp_server
+        from starlette.routing import Mount
+        app.router.routes.append(Mount("/mcp", app=_streamable_app))
+    else:
+        print(f"[mcp] no token store at {token_path}; MCP wire disabled")
 
-        for r in req.relations:
-            src_id = _upsert_entity(conn, req.bot_id, r.src)
-            dst_id = _upsert_entity(conn, req.bot_id, r.dst)
-            conn.execute(
-                "INSERT OR REPLACE INTO edges "
-                "(src_entity_id, rel, dst_entity_id, weight, last_seen_ts) "
-                "VALUES (?, ?, ?, 1.0, ?)",
-                (src_id, r.rel, dst_id, now),
-            )
-
-        evicted = _evict_if_over_cap(
-            conn, req.bot_id, state["cap_per_bot"], now, state["weights"]
-        )
-        conn.commit()
-        return RememberResponse(memory_id=memory_id, evicted=evicted)
-
-    @app.post("/memory/forget", response_model=ForgetResponse)
-    async def forget(req: ForgetRequest):
-        conn = state["conn"]
-        cur = conn.execute(
-            "DELETE FROM memories WHERE id=? AND bot_id=?", (req.memory_id, req.bot_id)
-        )
-        deleted = cur.rowcount > 0
-        if deleted:
-            conn.execute("DELETE FROM vec_memories WHERE memory_id=?", (req.memory_id,))
-            conn.execute(
-                "DELETE FROM memory_entities WHERE memory_id=?", (req.memory_id,)
-            )
-            conn.commit()
-        return ForgetResponse(forgotten=deleted)
-
-    @app.post("/memory/recall", response_model=RecallResponse)
-    async def recall(req: RecallRequest):
-        conn = state["conn"]
-        embedder = state["embedder"]
-        cur = conn.execute(
-            "SELECT id, text, salience, created_ts, last_recalled_ts, embedding "
-            "FROM memories WHERE bot_id=?",
-            (req.bot_id,),
-        )
-        rows = cur.fetchall()
-        if not rows:
-            return RecallResponse(memories=[])
-
-        q_emb = await embedder.embed(req.query)
-        now = int(time.time())
-
-        scored: list[tuple[float, str, str, int]] = []
-        for row in rows:
-            mid, text, salience, created_ts, last_recalled_ts, emb_blob = row
-            emb = np.frombuffer(emb_blob, dtype=np.float32) if emb_blob else None
-            m = Memory(
-                id=mid, bot_id=req.bot_id, text=text, salience=salience,
-                created_ts=created_ts, last_recalled_ts=last_recalled_ts,
-                embedding=emb,
-            )
-            s = score_memory(m, q_emb, now, state["weights"])
-            scored.append((s, mid, text, created_ts))
-
-        scored.sort(reverse=True, key=lambda t: t[0])
-        top = scored[: req.top_k]
-        for s, mid, _, _ in top:
-            conn.execute(
-                "UPDATE memories SET last_recalled_ts=? WHERE id=?", (now, mid)
-            )
-        conn.commit()
-
-        return RecallResponse(
-            memories=[
-                RecalledMemory(memory_id=mid, text=text, score=float(s), ts=ts)
-                for s, mid, text, ts in top
-            ]
-        )
-
-    @app.post("/memory/recall_about", response_model=RecallAboutResponse)
-    async def recall_about(req: RecallAboutRequest):
-        conn = state["conn"]
-        embedder = state["embedder"]
-        entity_lower = req.entity.lower()
-
-        # Resolve seed entity.
-        cur = conn.execute(
-            "SELECT id FROM entities WHERE bot_id=? AND name_lower=?",
-            (req.bot_id, entity_lower),
-        )
-        row = cur.fetchone()
-        if not row:
-            return RecallAboutResponse(hints=[])
-        seed_id = row[0]
-
-        # BFS traversal up to max_hops. Edges are bidirectional.
-        visited = {seed_id}
-        frontier = {seed_id}
-        for _ in range(max(0, req.max_hops)):
-            if not frontier:
-                break
-            placeholders = ",".join("?" * len(frontier))
-            cur = conn.execute(
-                f"SELECT src_entity_id, dst_entity_id FROM edges "
-                f"WHERE src_entity_id IN ({placeholders}) "
-                f"   OR dst_entity_id IN ({placeholders})",
-                tuple(frontier) + tuple(frontier),
-            )
-            next_frontier = set()
-            for s, d in cur.fetchall():
-                for n in (s, d):
-                    if n not in visited:
-                        next_frontier.add(n)
-                        visited.add(n)
-            frontier = next_frontier
-
-        # Pull memories attached to any visited entity.
-        placeholders = ",".join("?" * len(visited))
-        cur = conn.execute(
-            f"SELECT DISTINCT m.id, m.text, m.salience, m.created_ts, "
-            f"       m.last_recalled_ts, m.embedding "
-            f"FROM memories m "
-            f"JOIN memory_entities me ON me.memory_id = m.id "
-            f"WHERE m.bot_id = ? AND me.entity_id IN ({placeholders})",
-            (req.bot_id,) + tuple(visited),
-        )
-        rows = cur.fetchall()
-        if not rows:
-            return RecallAboutResponse(hints=[])
-
-        q_emb = await embedder.embed(f"recent events near {req.entity}")
-        now = int(time.time())
-        scored = []
-        for r in rows:
-            mid, text, sal, ct, lr, emb_blob = r
-            emb = np.frombuffer(emb_blob, dtype=np.float32) if emb_blob else None
-            m = Memory(
-                id=mid, bot_id=req.bot_id, text=text, salience=sal,
-                created_ts=ct, last_recalled_ts=lr, embedding=emb,
-            )
-            scored.append((score_memory(m, q_emb, now, state["weights"]), mid, text))
-        scored.sort(reverse=True, key=lambda t: t[0])
-        top = scored[: req.top_k]
-        for _, mid, _ in top:
-            conn.execute(
-                "UPDATE memories SET last_recalled_ts=? WHERE id=?", (now, mid)
-            )
-        conn.commit()
-        return RecallAboutResponse(hints=[text for _, _, text in top])
-
-    @app.post("/memory/personality/get", response_model=PersonalityGetResponse)
-    async def personality_get(req: PersonalityGetRequest):
-        conn = state["conn"]
-        cur = conn.execute(
-            "SELECT persona FROM bots WHERE bot_id=?", (req.bot_id,)
-        )
-        row = cur.fetchone()
-        if not row or row[0] is None:
-            raise HTTPException(status_code=404, detail="no persona for this bot")
-        return PersonalityGetResponse(persona=row[0])
-
-    @app.post("/memory/personality/set", response_model=PersonalitySetResponse)
-    async def personality_set(req: PersonalitySetRequest):
-        if len(req.persona) > PERSONA_MAX_CHARS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"persona exceeds {PERSONA_MAX_CHARS} chars",
-            )
-        now = int(time.time())
-        conn = state["conn"]
-        conn.execute(
-            "INSERT INTO bots (bot_id, persona, created_ts) VALUES (?, ?, ?) "
-            "ON CONFLICT(bot_id) DO UPDATE SET persona=excluded.persona",
-            (req.bot_id, req.persona, now),
-        )
-        conn.commit()
-        return PersonalitySetResponse(ok=True)
+    return app

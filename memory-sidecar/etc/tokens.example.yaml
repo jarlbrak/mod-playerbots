@@ -1,0 +1,5 @@
+# Generate: python -c "import secrets; print(secrets.token_urlsafe(32))"
+tokens:
+  - token: "REPLACE_WITH_GENERATED_TOKEN"
+    identity: "claude-code"
+    scope: ["memory.*", "goals.*"]
