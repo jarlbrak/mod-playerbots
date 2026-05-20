@@ -73,6 +73,20 @@ class RecallAboutResponse(BaseModel):
     hints: list[str]
 
 
+class UpdateRequest(BaseModel):
+    bot_id:      str
+    memory_id:   str
+    text:        str | None = None
+    salience:    float | None = None
+    memory_type: str | None = None
+    source:      str | None = None
+
+
+class UpdateResponse(BaseModel):
+    updated:     bool
+    re_embedded: bool
+
+
 def build_router(state: dict[str, Any]) -> APIRouter:
     router = APIRouter()
 
@@ -252,5 +266,64 @@ def build_router(state: dict[str, Any]) -> APIRouter:
             )
         conn.commit()
         return RecallAboutResponse(hints=[text for _, _, text in top])
+
+    @router.put("/memory/update", response_model=UpdateResponse)
+    async def update(req: UpdateRequest):
+        if req.text is None and req.salience is None \
+                and req.memory_type is None and req.source is None:
+            raise HTTPException(status_code=400, detail="no updatable field provided")
+
+        conn = state["conn"]
+        cur = conn.execute(
+            "SELECT id FROM memories WHERE id=? AND bot_id=?",
+            (req.memory_id, req.bot_id),
+        )
+        if cur.fetchone() is None:
+            raise HTTPException(status_code=404, detail="memory not found for this bot")
+
+        sets: list[str] = []
+        params: list[Any] = []
+        re_embedded = False
+
+        if req.text is not None:
+            embedder = state["embedder"]
+            new_emb = await embedder.embed(req.text)
+            sets.append("text=?")
+            params.append(req.text)
+            re_embedded = True
+            # vec_memories is a virtual table; trigger pattern doesn't fire on
+            # it (no AFTER UPDATE trigger for vec0). Manage manually.
+            conn.execute("DELETE FROM vec_memories WHERE memory_id=?", (req.memory_id,))
+            conn.execute(
+                "INSERT INTO vec_memories (memory_id, bot_id, embedding) VALUES (?, ?, ?)",
+                (req.memory_id, req.bot_id, embedding_to_blob(new_emb)),
+            )
+            sets.append("embedding=?")
+            params.append(embedding_to_blob(new_emb))
+
+        if req.salience is not None:
+            sets.append("salience=?")
+            params.append(max(0.0, min(1.0, req.salience)))
+
+        if req.memory_type is not None:
+            sets.append("memory_type=?")
+            params.append(req.memory_type)
+
+        if req.source is not None:
+            sets.append("source=?")
+            params.append(req.source)
+
+        now = int(time.time())
+        sets.append("last_recalled_ts=?")
+        params.append(now)
+
+        params.append(req.memory_id)
+        conn.execute(
+            f"UPDATE memories SET {', '.join(sets)} WHERE id=?",
+            params,
+        )
+        conn.commit()
+
+        return UpdateResponse(updated=True, re_embedded=re_embedded)
 
     return router
