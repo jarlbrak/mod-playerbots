@@ -373,14 +373,17 @@ def build_router(state: dict[str, Any]) -> APIRouter:
         extra_alias_params = _extra_params(req)
 
         # 1. BM25 via FTS5
-        safe_q = req.query.replace('"', ' ').strip()
-        if safe_q:
+        # NEW: stopword-filtered OR-joined query so FTS5 actually matches.
+        # Returns None if the query is all stopwords / too short → skip BM25.
+        from memory_sidecar.helpers import build_fts5_query
+        fts_q = build_fts5_query(req.query)
+        if fts_q:
             cur = conn.execute(
                 "SELECT m.id FROM memories_fts f "
                 "JOIN memories m ON m.rowid = f.rowid "
                 f"WHERE memories_fts MATCH ? AND m.bot_id = ? {extra_alias_where} "
                 "ORDER BY rank LIMIT ?",
-                (safe_q, req.bot_id) + extra_alias_params + (over_fetch,),
+                (fts_q, req.bot_id) + extra_alias_params + (over_fetch,),
             )
             bm25 = [r[0] for r in cur.fetchall()]
         else:
