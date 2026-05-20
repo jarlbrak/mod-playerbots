@@ -35,6 +35,13 @@ def create_app(embedder: Optional[Any] = None) -> FastAPI:
         "mmr_lambda": float(os.environ.get("MEM_MMR_LAMBDA", "0.7")),
     }
 
+    # Deferred-init holder for the MCP server. The lifespan checks this at
+    # call time; if populated by the MCP build block below, the lifespan
+    # wraps yield with `session_manager.run()` so the streamable-HTTP
+    # transport's session manager is alive for the duration of the app.
+    # Mirrors the harness-daemon pattern (kb_642162c3 app.py:240-258).
+    mcp_holder: dict[str, Any] = {}
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         conn = open_db(state["db_path"])
@@ -54,10 +61,19 @@ def create_app(embedder: Optional[Any] = None) -> FastAPI:
         state["conn"] = conn
         if state["embedder"] is None:
             state["embedder"] = EmbeddingClient(state["embed_endpoint"], dim=384)
-        yield
-        conn.close()
-        if hasattr(state["embedder"], "aclose"):
-            await state["embedder"].aclose()
+        try:
+            mcp_server = mcp_holder.get("mcp_server")
+            if mcp_server is not None:
+                # FastMCP's streamable-HTTP transport requires its session
+                # manager to be running for the duration of the app.
+                async with mcp_server.session_manager.run():
+                    yield
+            else:
+                yield
+        finally:
+            conn.close()
+            if hasattr(state["embedder"], "aclose"):
+                await state["embedder"].aclose()
 
     app = FastAPI(lifespan=lifespan, title="memory-sidecar")
     app.state.mem = state
@@ -149,8 +165,13 @@ def create_app(embedder: Optional[Any] = None) -> FastAPI:
             allowed_hosts=mcp_hosts,
             resource_url=resource_url,
         )
+        # Call streamable_http_app() once so session_manager is accessible
+        # (FastMCP raises if accessed before this — kb_642162c3 §similar).
+        _streamable_app = mcp_server.streamable_http_app()
+        # Register with the lifespan holder so session_manager.run() wraps yield.
+        mcp_holder["mcp_server"] = mcp_server
         from starlette.routing import Mount
-        app.router.routes.append(Mount("/mcp", app=mcp_server.streamable_http_app()))
+        app.router.routes.append(Mount("/mcp", app=_streamable_app))
     else:
         print(f"[mcp] no token store at {token_path}; MCP wire disabled")
 
