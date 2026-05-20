@@ -10,6 +10,7 @@ Run:
 Each test uses a throwaway bot_id (f"v02-{uuid.uuid4().hex[:8]}") to
 avoid touching the 962K production memories.
 """
+import json
 import os
 import time
 import uuid
@@ -398,7 +399,23 @@ def test_mcp_parity_15_tools_via_tools_list():
             "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {},
         }, headers={**headers, "mcp-session-id": session_id})
         assert r_tools.status_code == 200, r_tools.text
-        tools = r_tools.json().get("result", {}).get("tools", [])
+
+        # The streamable-HTTP transport may return SSE-framed responses
+        # (event: message\r\ndata: {...}\r\n\r\n) or plain JSON depending on
+        # whether the session is streaming. Handle both.
+        ctype = r_tools.headers.get("content-type", "")
+        if "text/event-stream" in ctype:
+            data_line = next(
+                (l[len("data: "):] for l in r_tools.text.splitlines()
+                 if l.startswith("data: ")),
+                None,
+            )
+            assert data_line is not None, f"SSE response with no data line: {r_tools.text[:200]}"
+            envelope = json.loads(data_line)
+        else:
+            envelope = r_tools.json()
+
+        tools = envelope.get("result", {}).get("tools", [])
         assert len(tools) == 15, f"expected 15 tools, got {len(tools)}: {[t['name'] for t in tools]}"
 
 
