@@ -2,7 +2,23 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from memory_sidecar.db import open_db, run_migrations
+from memory_sidecar.db import run_migrations as run_legacy
+from memory_sidecar.migrations import apply_migrations
+
+
+@pytest.fixture
+def temp_db_with_v02_migrations(tmp_path):
+    """Fresh DB with legacy schema + all v0.2 migrations applied."""
+    db = tmp_path / "test.sqlite"
+    conn = open_db(str(db))
+    run_legacy(conn)
+    migrations_dir = Path(__file__).resolve().parent.parent / "migrations"
+    apply_migrations(conn, str(migrations_dir))
+    yield conn
+    conn.close()
 
 
 def test_open_db_creates_file_and_loads_extension(tmp_path: Path):
@@ -76,3 +92,30 @@ def test_memories_index_present(tmp_path: Path):
     assert "idx_memories_bot" in indexes
     assert "idx_entities_bot_name" in indexes
     conn.close()
+
+
+def test_memories_has_memory_type_and_source(temp_db_with_v02_migrations):
+    """After v0.2 migrations, memories table has memory_type + source columns."""
+    cur = temp_db_with_v02_migrations.execute("PRAGMA table_info(memories)")
+    cols = {row[1]: row[2] for row in cur.fetchall()}
+    assert "memory_type" in cols
+    assert cols["memory_type"] == "TEXT"
+    assert "source" in cols
+    assert cols["source"] == "TEXT"
+
+
+def test_memory_type_default_is_event(temp_db_with_v02_migrations):
+    """Existing rows backfill to 'event' via DEFAULT."""
+    conn = temp_db_with_v02_migrations
+    import time
+    now = int(time.time())
+    conn.execute("INSERT INTO bots (bot_id, created_ts) VALUES ('b1', ?)", (now,))
+    conn.execute(
+        "INSERT INTO memories (id, bot_id, text, salience, created_ts, last_recalled_ts) "
+        "VALUES ('m1', 'b1', 'hello', 0.5, ?, ?)",
+        (now, now),
+    )
+    cur = conn.execute("SELECT memory_type, source FROM memories WHERE id='m1'")
+    row = cur.fetchone()
+    assert row[0] == "event"
+    assert row[1] is None
