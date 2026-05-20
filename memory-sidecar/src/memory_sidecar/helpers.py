@@ -115,7 +115,11 @@ def build_fts5_query(natural_query: str, max_terms: int = 6) -> str | None:
         >>> build_fts5_query("what did Alice and I plan about the mount")
         "alice OR plan OR mount"
     """
-    tokens = re.findall(r"[a-zA-Z']+", natural_query.lower())
+    # Tokenize on alphabetic runs only. Apostrophes break FTS5 MATCH
+    # syntax ("brun's" → unquoted ' is a parse error). The porter+
+    # unicode61 tokenizer in our FTS5 also drops apostrophes when
+    # indexing, so this matches what's in the index.
+    tokens = re.findall(r"[a-zA-Z]+", natural_query.lower())
     sig: list[str] = []
     seen: set[str] = set()
     for t in tokens:

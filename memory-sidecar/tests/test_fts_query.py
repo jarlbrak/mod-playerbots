@@ -42,11 +42,15 @@ def test_empty_string_returns_none():
     assert build_fts5_query("") is None
 
 
-def test_apostrophes_preserved_in_tokens():
+def test_apostrophes_stripped_for_fts5_safety():
     out = build_fts5_query("Alice's mount and brother's gold")
-    # Tokens with apostrophes are kept as one token
-    assert "alice's" in out
-    assert "brother's" in out
+    # Apostrophes break FTS5 MATCH syntax — they're stripped, so
+    # "Alice's" becomes "alice" + "s" (and "s" drops for <3 chars).
+    assert "alice" in out
+    assert "brother" in out
+    assert "mount" in out
+    assert "gold" in out
+    assert "'" not in out  # critical: no apostrophe leaks to FTS5
 
 
 def test_punctuation_stripped():
