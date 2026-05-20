@@ -110,6 +110,34 @@ class ListResponse(BaseModel):
     total: int
 
 
+class SearchRequest(BaseModel):
+    bot_id:      str
+    query:       str
+    top_k:       int = 5
+    since_ts:    int | None = None
+    until_ts:    int | None = None
+    memory_type: str | None = None
+
+
+class SearchSignals(BaseModel):
+    bm25_rank:   int | None = None
+    dense_rank:  int | None = None
+    entity_rank: int | None = None
+
+
+class SearchItem(BaseModel):
+    memory_id: str
+    text:      str
+    score:     float
+    ts:        int
+    signals:   SearchSignals
+
+
+class SearchResponse(BaseModel):
+    items:            list[SearchItem]
+    total_candidates: int
+
+
 def build_router(state: dict[str, Any]) -> APIRouter:
     router = APIRouter()
 
@@ -314,6 +342,128 @@ def build_router(state: dict[str, Any]) -> APIRouter:
             )
         conn.commit()
         return RecallAboutResponse(hints=[meta[mid][0] for mid, _ in selected])
+
+    def _extra_where_clause_alias(alias: str, req) -> str:
+        parts = []
+        if getattr(req, "since_ts", None) is not None:
+            parts.append(f"AND {alias}.created_ts >= ?")
+        if getattr(req, "until_ts", None) is not None:
+            parts.append(f"AND {alias}.created_ts <= ?")
+        if getattr(req, "memory_type", None) is not None:
+            parts.append(f"AND {alias}.memory_type = ?")
+        return " ".join(parts)
+
+    @router.post("/memory/search", response_model=SearchResponse)
+    async def search(req: SearchRequest):
+        from memory_sidecar.search import rrf_fuse, mmr_select as _mmr_select
+        conn = state["conn"]
+        embedder = state["embedder"]
+        q_emb = await embedder.embed(req.query)
+        over_fetch = max(req.top_k * 4, 20)
+        extra_alias_where = _extra_where_clause_alias("m", req)
+        extra_alias_params = _extra_params(req)
+
+        # 1. BM25 via FTS5
+        safe_q = req.query.replace('"', ' ').strip()
+        if safe_q:
+            cur = conn.execute(
+                "SELECT m.id FROM memories_fts f "
+                "JOIN memories m ON m.rowid = f.rowid "
+                f"WHERE memories_fts MATCH ? AND m.bot_id = ? {extra_alias_where} "
+                "ORDER BY rank LIMIT ?",
+                (safe_q, req.bot_id) + extra_alias_params + (over_fetch,),
+            )
+            bm25 = [r[0] for r in cur.fetchall()]
+        else:
+            bm25 = []
+
+        # 2. Dense via vec_memories KNN
+        cur = conn.execute(
+            "SELECT v.memory_id FROM vec_memories v "
+            "JOIN memories m ON m.id = v.memory_id "
+            f"WHERE v.bot_id = ? {extra_alias_where} "
+            "ORDER BY vec_distance_cosine(v.embedding, ?) ASC LIMIT ?",
+            (req.bot_id,) + extra_alias_params + (embedding_to_blob(q_emb), over_fetch),
+        )
+        dense = [r[0] for r in cur.fetchall()]
+
+        # 3. Entity via BFS — light heuristic: find any entity name appearing in query
+        cur = conn.execute(
+            "SELECT name_lower, id FROM entities WHERE bot_id = ?", (req.bot_id,)
+        )
+        ents = cur.fetchall()
+        q_lower = req.query.lower()
+        seed_ids = [eid for nl, eid in ents if nl and nl in q_lower]
+        entity = []
+        if seed_ids:
+            visited = set(seed_ids)
+            for _ in range(2):  # max_hops=2
+                if not visited:
+                    break
+                placeholders = ",".join("?" * len(visited))
+                cur = conn.execute(
+                    f"SELECT src_entity_id, dst_entity_id FROM edges "
+                    f"WHERE src_entity_id IN ({placeholders}) "
+                    f"   OR dst_entity_id IN ({placeholders})",
+                    tuple(visited) + tuple(visited),
+                )
+                for s, d in cur.fetchall():
+                    visited.update((s, d))
+            placeholders = ",".join("?" * len(visited))
+            cur = conn.execute(
+                f"SELECT DISTINCT m.id FROM memories m "
+                f"JOIN memory_entities me ON me.memory_id = m.id "
+                f"WHERE m.bot_id = ? AND me.entity_id IN ({placeholders}) "
+                f"  {extra_alias_where} "
+                f"LIMIT ?",
+                (req.bot_id,) + tuple(visited) + extra_alias_params + (over_fetch,),
+            )
+            entity = [r[0] for r in cur.fetchall()]
+
+        # RRF fusion
+        fused = rrf_fuse([bm25, dense, entity], k=60)
+        if not fused:
+            return SearchResponse(items=[], total_candidates=0)
+
+        # Build candidates with embeddings for MMR
+        ids_to_score = list(fused.keys())
+        placeholders = ",".join("?" * len(ids_to_score))
+        cur = conn.execute(
+            f"SELECT id, text, created_ts, embedding "
+            f"FROM memories WHERE bot_id = ? AND id IN ({placeholders})",
+            (req.bot_id,) + tuple(ids_to_score),
+        )
+        rows = cur.fetchall()
+        candidates_for_mmr: list[tuple[str, np.ndarray]] = []
+        text_by_id: dict[str, tuple[str, int]] = {}
+        for r in rows:
+            mid, text, ct, blob = r
+            text_by_id[mid] = (text, ct)
+            if blob:
+                candidates_for_mmr.append((mid, np.frombuffer(blob, dtype=np.float32)))
+
+        selected = _mmr_select(candidates_for_mmr, q_emb,
+                               top_k=req.top_k, lam=state["mmr_lambda"])
+
+        bm25_pos = {d: i for i, d in enumerate(bm25)}
+        dense_pos = {d: i for i, d in enumerate(dense)}
+        entity_pos = {d: i for i, d in enumerate(entity)}
+
+        items = []
+        for mid, _ in selected:
+            text, ct = text_by_id.get(mid, ("", 0))
+            items.append(SearchItem(
+                memory_id=mid,
+                text=text,
+                score=fused[mid],
+                ts=ct,
+                signals=SearchSignals(
+                    bm25_rank=bm25_pos.get(mid),
+                    dense_rank=dense_pos.get(mid),
+                    entity_rank=entity_pos.get(mid),
+                ),
+            ))
+        return SearchResponse(items=items, total_candidates=len(fused))
 
     def _extra_where_clause(req) -> str:
         """Build optional WHERE clause fragments for since/until/memory_type."""
