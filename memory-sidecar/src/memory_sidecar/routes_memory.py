@@ -217,15 +217,24 @@ def build_router(state: dict[str, Any]) -> APIRouter:
         over_fetch = max(req.top_k * 4, 20)
         extra_where = _extra_where_clause(req)
         extra_params = _extra_params(req)
+        # NEW (sqlite-vec KNN via MATCH; pushes work into vec0 index)
+        # We over-fetch from KNN, then filter by bot_id + extras at the JOIN.
+        # sqlite-vec v0.1.9 caps k at 4096; clamp to that limit.
+        knn_k = min(over_fetch * 50, 4096)  # over-fetch generously across all bots; JOIN filters down
         cur = conn.execute(
-            "SELECT v.memory_id, m.text, m.salience, m.created_ts, "
+            "WITH knn AS ("
+            "    SELECT memory_id, distance "
+            "    FROM vec_memories "
+            "    WHERE embedding MATCH ? AND k = ?"
+            ") "
+            "SELECT m.id, m.text, m.salience, m.created_ts, "
             "       m.last_recalled_ts, m.embedding "
-            "FROM vec_memories v "
-            "JOIN memories m ON m.id = v.memory_id "
-            f"WHERE v.bot_id = ? {extra_where} "
-            "ORDER BY vec_distance_cosine(v.embedding, ?) ASC "
+            "FROM knn "
+            "JOIN memories m ON m.id = knn.memory_id "
+            f"WHERE m.bot_id = ? {extra_where} "
+            "ORDER BY knn.distance ASC "
             "LIMIT ?",
-            (req.bot_id,) + extra_params + (embedding_to_blob(q_emb), over_fetch),
+            (embedding_to_blob(q_emb), knn_k, req.bot_id) + extra_params + (over_fetch,),
         )
         rows = cur.fetchall()
         if not rows:
@@ -377,13 +386,20 @@ def build_router(state: dict[str, Any]) -> APIRouter:
         else:
             bm25 = []
 
-        # 2. Dense via vec_memories KNN
+        # 2. Dense via vec_memories KNN (sqlite-vec MATCH syntax)
+        # sqlite-vec v0.1.9 caps k at 4096; clamp to that limit.
+        knn_k = min(over_fetch * 50, 4096)
         cur = conn.execute(
-            "SELECT v.memory_id FROM vec_memories v "
-            "JOIN memories m ON m.id = v.memory_id "
-            f"WHERE v.bot_id = ? {extra_alias_where} "
-            "ORDER BY vec_distance_cosine(v.embedding, ?) ASC LIMIT ?",
-            (req.bot_id,) + extra_alias_params + (embedding_to_blob(q_emb), over_fetch),
+            "WITH knn AS ("
+            "    SELECT memory_id, distance "
+            "    FROM vec_memories "
+            "    WHERE embedding MATCH ? AND k = ?"
+            ") "
+            "SELECT knn.memory_id FROM knn "
+            "JOIN memories m ON m.id = knn.memory_id "
+            f"WHERE m.bot_id = ? {extra_alias_where} "
+            "ORDER BY knn.distance ASC LIMIT ?",
+            (embedding_to_blob(q_emb), knn_k, req.bot_id) + extra_alias_params + (over_fetch,),
         )
         dense = [r[0] for r in cur.fetchall()]
 
