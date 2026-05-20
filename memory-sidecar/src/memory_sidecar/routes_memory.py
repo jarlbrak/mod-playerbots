@@ -13,6 +13,7 @@ from memory_sidecar.helpers import (
     upsert_entity,
 )
 from memory_sidecar.recall import Memory, score_memory
+from memory_sidecar.search import mmr_select
 
 
 # ---- Request / response models (moved verbatim from main.py) ----
@@ -46,9 +47,12 @@ class ForgetResponse(BaseModel):
 
 
 class RecallRequest(BaseModel):
-    bot_id: str
-    query: str
-    top_k: int = 5
+    bot_id:      str
+    query:       str
+    top_k:       int = 5
+    since_ts:    int | None = None
+    until_ts:    int | None = None
+    memory_type: str | None = None
 
 
 class RecalledMemory(BaseModel):
@@ -63,10 +67,13 @@ class RecallResponse(BaseModel):
 
 
 class RecallAboutRequest(BaseModel):
-    bot_id: str
-    entity: str
-    max_hops: int = 2
-    top_k: int = 3
+    bot_id:      str
+    entity:      str
+    max_hops:    int = 2
+    top_k:       int = 3
+    since_ts:    int | None = None
+    until_ts:    int | None = None
+    memory_type: str | None = None
 
 
 class RecallAboutResponse(BaseModel):
@@ -176,33 +183,47 @@ def build_router(state: dict[str, Any]) -> APIRouter:
     async def recall(req: RecallRequest):
         conn = state["conn"]
         embedder = state["embedder"]
+        q_emb = await embedder.embed(req.query)
+
+        # KNN against vec_memories (over-fetch for MMR + filters)
+        over_fetch = max(req.top_k * 4, 20)
+        extra_where = _extra_where_clause(req)
+        extra_params = _extra_params(req)
         cur = conn.execute(
-            "SELECT id, text, salience, created_ts, last_recalled_ts, embedding "
-            "FROM memories WHERE bot_id=?",
-            (req.bot_id,),
+            "SELECT v.memory_id, m.text, m.salience, m.created_ts, "
+            "       m.last_recalled_ts, m.embedding "
+            "FROM vec_memories v "
+            "JOIN memories m ON m.id = v.memory_id "
+            f"WHERE v.bot_id = ? {extra_where} "
+            "ORDER BY vec_distance_cosine(v.embedding, ?) ASC "
+            "LIMIT ?",
+            (req.bot_id,) + extra_params + (embedding_to_blob(q_emb), over_fetch),
         )
         rows = cur.fetchall()
         if not rows:
             return RecallResponse(memories=[])
 
-        q_emb = await embedder.embed(req.query)
         now = int(time.time())
-
-        scored: list[tuple[float, str, str, int]] = []
+        candidates: list[tuple[str, np.ndarray]] = []
+        meta: dict[str, tuple[str, float, int]] = {}  # memory_id → (text, score, created_ts)
         for row in rows:
-            mid, text, salience, created_ts, last_recalled_ts, emb_blob = row
+            mid, text, sal, ct, lr, emb_blob = row
             emb = np.frombuffer(emb_blob, dtype=np.float32) if emb_blob else None
             m = Memory(
-                id=mid, bot_id=req.bot_id, text=text, salience=salience,
-                created_ts=created_ts, last_recalled_ts=last_recalled_ts,
-                embedding=emb,
+                id=mid, bot_id=req.bot_id, text=text, salience=sal,
+                created_ts=ct, last_recalled_ts=lr, embedding=emb,
             )
-            s = score_memory(m, q_emb, now, state["weights"])
-            scored.append((s, mid, text, created_ts))
+            s = score_memory(m, q_emb, now, state["weights"],
+                             recency_basis=state["recency_basis"])
+            if emb is not None:
+                candidates.append((mid, emb))
+            meta[mid] = (text, s, ct)
 
-        scored.sort(reverse=True, key=lambda t: t[0])
-        top = scored[: req.top_k]
-        for s, mid, _, _ in top:
+        # MMR diversity reranking
+        selected = mmr_select(candidates, q_emb, top_k=req.top_k,
+                              lam=state["mmr_lambda"])
+
+        for mid, _ in selected:
             conn.execute(
                 "UPDATE memories SET last_recalled_ts=? WHERE id=?", (now, mid)
             )
@@ -210,8 +231,9 @@ def build_router(state: dict[str, Any]) -> APIRouter:
 
         return RecallResponse(
             memories=[
-                RecalledMemory(memory_id=mid, text=text, score=float(s), ts=ts)
-                for s, mid, text, ts in top
+                RecalledMemory(memory_id=mid, text=meta[mid][0],
+                               score=float(meta[mid][1]), ts=meta[mid][2])
+                for mid, _ in selected
             ]
         )
 
@@ -251,13 +273,15 @@ def build_router(state: dict[str, Any]) -> APIRouter:
             frontier = next_frontier
 
         placeholders = ",".join("?" * len(visited))
+        extra_where = _extra_where_clause(req)
+        extra_params = _extra_params(req)
         cur = conn.execute(
             f"SELECT DISTINCT m.id, m.text, m.salience, m.created_ts, "
             f"       m.last_recalled_ts, m.embedding "
             f"FROM memories m "
             f"JOIN memory_entities me ON me.memory_id = m.id "
-            f"WHERE m.bot_id = ? AND me.entity_id IN ({placeholders})",
-            (req.bot_id,) + tuple(visited),
+            f"WHERE m.bot_id = ? AND me.entity_id IN ({placeholders}) {extra_where}",
+            (req.bot_id,) + tuple(visited) + extra_params,
         )
         rows = cur.fetchall()
         if not rows:
@@ -265,7 +289,8 @@ def build_router(state: dict[str, Any]) -> APIRouter:
 
         q_emb = await embedder.embed(f"recent events near {req.entity}")
         now = int(time.time())
-        scored = []
+        candidates: list[tuple[str, np.ndarray]] = []
+        meta: dict[str, tuple[str, float, int]] = {}
         for r in rows:
             mid, text, sal, ct, lr, emb_blob = r
             emb = np.frombuffer(emb_blob, dtype=np.float32) if emb_blob else None
@@ -273,15 +298,43 @@ def build_router(state: dict[str, Any]) -> APIRouter:
                 id=mid, bot_id=req.bot_id, text=text, salience=sal,
                 created_ts=ct, last_recalled_ts=lr, embedding=emb,
             )
-            scored.append((score_memory(m, q_emb, now, state["weights"]), mid, text))
-        scored.sort(reverse=True, key=lambda t: t[0])
-        top = scored[: req.top_k]
-        for _, mid, _ in top:
+            s = score_memory(m, q_emb, now, state["weights"],
+                             recency_basis=state["recency_basis"])
+            if emb is not None:
+                candidates.append((mid, emb))
+            meta[mid] = (text, s, ct)
+
+        # MMR diversity reranking
+        selected = mmr_select(candidates, q_emb, top_k=req.top_k,
+                              lam=state["mmr_lambda"])
+
+        for mid, _ in selected:
             conn.execute(
                 "UPDATE memories SET last_recalled_ts=? WHERE id=?", (now, mid)
             )
         conn.commit()
-        return RecallAboutResponse(hints=[text for _, _, text in top])
+        return RecallAboutResponse(hints=[meta[mid][0] for mid, _ in selected])
+
+    def _extra_where_clause(req) -> str:
+        """Build optional WHERE clause fragments for since/until/memory_type."""
+        parts: list[str] = []
+        if getattr(req, "since_ts", None) is not None:
+            parts.append("AND m.created_ts >= ?")
+        if getattr(req, "until_ts", None) is not None:
+            parts.append("AND m.created_ts <= ?")
+        if getattr(req, "memory_type", None) is not None:
+            parts.append("AND m.memory_type = ?")
+        return " ".join(parts)
+
+    def _extra_params(req) -> tuple[Any, ...]:
+        out: list[Any] = []
+        if getattr(req, "since_ts", None) is not None:
+            out.append(req.since_ts)
+        if getattr(req, "until_ts", None) is not None:
+            out.append(req.until_ts)
+        if getattr(req, "memory_type", None) is not None:
+            out.append(req.memory_type)
+        return tuple(out)
 
     @router.get("/memory/list", response_model=ListResponse)
     async def list_memories(

@@ -29,6 +29,8 @@ def create_app(embedder: Optional[Any] = None) -> FastAPI:
             w_imp=float(os.environ.get("MEM_W_IMP", "0.3")),
             tau_seconds=int(os.environ.get("MEM_TAU_SECONDS", "604800")),
         ),
+        "recency_basis": os.environ.get("MEM_W_REC_TIMESTAMP", "created"),
+        "mmr_lambda": float(os.environ.get("MEM_MMR_LAMBDA", "0.7")),
     }
 
     @asynccontextmanager
