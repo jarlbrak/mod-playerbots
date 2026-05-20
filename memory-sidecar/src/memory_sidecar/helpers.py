@@ -1,6 +1,7 @@
 """Small helpers shared across route modules."""
 import base64
 import math
+import re
 import uuid
 from typing import Any
 
@@ -81,3 +82,53 @@ def evict_if_over_cap(conn, bot_id: str, cap: int, now: int, w: ScoringWeights) 
         conn.execute("DELETE FROM vec_memories WHERE memory_id=?", (mid,))
         conn.execute("DELETE FROM memory_entities WHERE memory_id=?", (mid,))
     return n_evict
+
+
+# ---- FTS5 query construction (v0.2.1) ----
+
+_STOPWORDS = frozenset({
+    'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'i', 'my', 'me', 'we', 'our', 'you', 'your', 'he', 'she', 'they', 'them',
+    'it', 'its', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
+    'this', 'that', 'by', 'from', 'as', 'not', 'no', 'so', 'if', 'do', 'did',
+    'have', 'had', 'has', 'will', 'would', 'can', 'could', 'should', 'shall',
+    'into', 'up', 'out', 'off', 'over', 'about', 'then', 'than', 'when', 'while',
+    'after', 'before', 'there', 'here', 'what', 'which', 'who', 'how',
+    'today', 'yesterday', 'now', 'just', 'very', 'also', 'too', 'more', 'some',
+    'all', 'any', 'each', 'both', 'few', 'other', 'same', 'such', 'only',
+})
+
+
+def build_fts5_query(natural_query: str, max_terms: int = 6) -> str | None:
+    """Convert a natural-language query into an FTS5 MATCH expression.
+
+    Strategy:
+      1. Lowercase + tokenize on word boundaries (alpha + apostrophe).
+      2. Drop tokens that are stopwords OR shorter than 3 chars.
+      3. Dedupe preserving first-occurrence order.
+      4. Cap at max_terms (default 6).
+      5. OR-join the survivors.
+
+    Returns None if no significant terms remain (caller should skip BM25).
+
+    Example:
+        >>> build_fts5_query("what did Alice and I plan about the mount")
+        "alice OR plan OR mount"
+    """
+    # Tokenize on alphabetic runs only. Apostrophes break FTS5 MATCH
+    # syntax ("brun's" → unquoted ' is a parse error). The porter+
+    # unicode61 tokenizer in our FTS5 also drops apostrophes when
+    # indexing, so this matches what's in the index.
+    tokens = re.findall(r"[a-zA-Z]+", natural_query.lower())
+    sig: list[str] = []
+    seen: set[str] = set()
+    for t in tokens:
+        if len(t) < 3 or t in _STOPWORDS or t in seen:
+            continue
+        seen.add(t)
+        sig.append(t)
+        if len(sig) >= max_terms:
+            break
+    if not sig:
+        return None
+    return ' OR '.join(sig)
