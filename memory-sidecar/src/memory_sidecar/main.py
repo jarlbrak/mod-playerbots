@@ -10,7 +10,7 @@ from memory_sidecar.db import open_db, run_migrations as run_legacy_migrations
 from memory_sidecar.embed import EmbeddingClient
 from memory_sidecar.migrations import apply_migrations
 from memory_sidecar.recall import ScoringWeights
-from memory_sidecar import routes_memory, routes_personality
+from memory_sidecar import routes_memory, routes_personality, routes_goals
 
 
 def create_app(embedder: Optional[Any] = None) -> FastAPI:
@@ -66,4 +66,5 @@ def create_app(embedder: Optional[Any] = None) -> FastAPI:
 
     app.include_router(routes_memory.build_router(state))
     app.include_router(routes_personality.build_router(state))
+    app.include_router(routes_goals.build_router(state))
     return app
