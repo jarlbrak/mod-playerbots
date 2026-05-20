@@ -1,12 +1,14 @@
 """FastAPI app factory for the memory sidecar."""
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI
 
 from memory_sidecar.db import open_db, run_migrations as run_legacy_migrations
 from memory_sidecar.embed import EmbeddingClient
+from memory_sidecar.migrations import apply_migrations
 from memory_sidecar.recall import ScoringWeights
 from memory_sidecar import routes_memory, routes_personality
 
@@ -32,7 +34,19 @@ def create_app(embedder: Optional[Any] = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         conn = open_db(state["db_path"])
-        run_legacy_migrations(conn)  # IF NOT EXISTS baseline (v0.1 schema)
+        # Legacy idempotent baseline (every CREATE has IF NOT EXISTS).
+        # Safe to run on existing prod DB.
+        run_legacy_migrations(conn)
+        # New versioned migrations (0001 is the same baseline, so it
+        # becomes a no-op on prod DBs already at-schema; just inserts
+        # the schema_version=1 row).
+        migrations_dir = os.environ.get(
+            "MEM_MIGRATIONS_DIR",
+            str(Path(__file__).resolve().parent.parent.parent / "migrations"),
+        )
+        n = apply_migrations(conn, migrations_dir)
+        if n:
+            print(f"[migrations] applied {n} migration(s); schema_version now updated")
         state["conn"] = conn
         if state["embedder"] is None:
             state["embedder"] = EmbeddingClient(state["embed_endpoint"], dim=384)
