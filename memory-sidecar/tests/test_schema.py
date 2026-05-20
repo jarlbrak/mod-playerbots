@@ -136,3 +136,49 @@ def test_entity_type_can_be_set(temp_db_with_v02_migrations):
     )
     cur = conn.execute("SELECT type FROM entities WHERE display_name='Alice'")
     assert cur.fetchone()[0] == "player"
+
+
+def test_goals_table_exists(temp_db_with_v02_migrations):
+    cur = temp_db_with_v02_migrations.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='goals'"
+    )
+    assert cur.fetchone() is not None
+
+
+def test_goals_table_columns(temp_db_with_v02_migrations):
+    cur = temp_db_with_v02_migrations.execute("PRAGMA table_info(goals)")
+    cols = {row[1]: (row[2], row[3]) for row in cur.fetchall()}
+    # (name, type, notnull)
+    assert cols["id"][0] == "TEXT"
+    assert cols["bot_id"] == ("TEXT", 1)
+    assert cols["text"] == ("TEXT", 1)
+    assert cols["status"] == ("TEXT", 1)
+    assert cols["source"][0] == "TEXT"
+    assert cols["priority"][0] == "INTEGER"
+    assert cols["origin_memory"][0] == "TEXT"
+    assert cols["created_ts"] == ("INTEGER", 1)
+    assert cols["updated_ts"] == ("INTEGER", 1)
+    assert cols["completed_ts"][0] == "INTEGER"
+
+
+def test_goals_indexes_exist(temp_db_with_v02_migrations):
+    cur = temp_db_with_v02_migrations.execute(
+        "SELECT name FROM sqlite_master WHERE type='index' "
+        "AND tbl_name='goals' ORDER BY name"
+    )
+    names = [row[0] for row in cur.fetchall()]
+    assert "idx_goals_bot_priority" in names
+    assert "idx_goals_bot_status" in names
+
+
+def test_goals_insert_works(temp_db_with_v02_migrations):
+    conn = temp_db_with_v02_migrations
+    import time
+    now = int(time.time())
+    conn.execute(
+        "INSERT INTO goals (id, bot_id, text, status, source, priority, "
+        "created_ts, updated_ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("g_test1", "bot_1", "grind to 15", "pending", "player:Alice", 0, now, now),
+    )
+    cur = conn.execute("SELECT status, text FROM goals WHERE id='g_test1'")
+    assert cur.fetchone() == ("pending", "grind to 15")
