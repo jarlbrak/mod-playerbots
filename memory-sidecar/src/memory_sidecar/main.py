@@ -11,6 +11,8 @@ from memory_sidecar.embed import EmbeddingClient
 from memory_sidecar.migrations import apply_migrations
 from memory_sidecar.recall import ScoringWeights
 from memory_sidecar import routes_memory, routes_personality, routes_goals
+from memory_sidecar.mcp_auth import TokenStore
+from memory_sidecar.mcp_server import build_mcp_server
 
 
 def create_app(embedder: Optional[Any] = None) -> FastAPI:
@@ -67,4 +69,65 @@ def create_app(embedder: Optional[Any] = None) -> FastAPI:
     app.include_router(routes_memory.build_router(state))
     app.include_router(routes_personality.build_router(state))
     app.include_router(routes_goals.build_router(state))
+
+    # Build the dispatcher map: tool_name -> async fn that takes pydantic args
+    # and returns the route's response. Routes must be mounted FIRST (above).
+    import memory_sidecar.routes_memory as rm
+    import memory_sidecar.routes_personality as rp
+    import memory_sidecar.routes_goals as rg
+
+    # Look up route endpoints from the app.
+    endpoints: dict[str, Any] = {}
+    for route in app.routes:
+        if hasattr(route, "endpoint") and hasattr(route, "methods") and hasattr(route, "path"):
+            for m in (route.methods or set()):
+                endpoints[f"{m} {route.path}"] = route.endpoint
+
+    def _route(key):
+        return endpoints[key]
+
+    async def _post_body(req_cls, key, args):
+        return await _route(key)(req_cls(**args.model_dump()))
+
+    async def _get_kw(key, args):
+        return await _route(key)(**args.model_dump(exclude_none=True))
+
+    dispatchers = {
+        "memory.write":           lambda a: _post_body(rm.RememberRequest,      "POST /memory/remember", a),
+        "memory.read":            lambda a: _get_kw("GET /memory/{memory_id}", a),
+        "memory.update":          lambda a: _post_body(rm.UpdateRequest,         "PUT /memory/update", a),
+        "memory.delete":          lambda a: _post_body(rm.ForgetRequest,         "POST /memory/forget", a),
+        "memory.recall":          lambda a: _post_body(rm.RecallRequest,         "POST /memory/recall", a),
+        "memory.recall_about":    lambda a: _post_body(rm.RecallAboutRequest,    "POST /memory/recall_about", a),
+        "memory.search":          lambda a: _post_body(rm.SearchRequest,         "POST /memory/search", a),
+        "memory.list":            lambda a: _get_kw("GET /memory/list", a),
+        "memory.personality_get": lambda a: _post_body(rp.PersonalityGetRequest, "POST /memory/personality/get", a),
+        "memory.personality_set": lambda a: _post_body(rp.PersonalitySetRequest, "POST /memory/personality/set", a),
+        "goals.create":           lambda a: _post_body(rg.GoalCreateRequest,     "POST /goals/create", a),
+        "goals.read":             lambda a: _get_kw("GET /goals/{goal_id}", a),
+        "goals.update":           lambda a: _post_body(rg.GoalUpdateRequest,     "PUT /goals/update", a),
+        "goals.list":             lambda a: _get_kw("GET /goals/list", a),
+        "goals.complete":         lambda a: _post_body(rg.GoalCompleteRequest,   "POST /goals/complete", a),
+    }
+
+    token_path = os.environ.get("MEM_TOKEN_STORE", "/etc/memory/tokens.yaml")
+    if Path(token_path).exists():
+        token_store = TokenStore.load_yaml(token_path)
+        mcp_listen = os.environ.get("MEM_LISTEN_ADDR", "0.0.0.0:8090")
+        mcp_hosts = [
+            "127.0.0.1:*", "localhost:*", "192.168.1.3:*",
+            mcp_listen,
+        ]
+        resource_url = f"http://{mcp_listen}/mcp"
+        mcp_server = build_mcp_server(
+            token_store=token_store,
+            dispatchers=dispatchers,
+            allowed_hosts=mcp_hosts,
+            resource_url=resource_url,
+        )
+        from starlette.routing import Mount
+        app.router.routes.append(Mount("/mcp", app=mcp_server.streamable_http_app()))
+    else:
+        print(f"[mcp] no token store at {token_path}; MCP wire disabled")
+
     return app
