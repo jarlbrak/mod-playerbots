@@ -1,10 +1,13 @@
 """HTTP routes for /memory/* (everything except personality + goals)."""
+import logging
 import time
 from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from memory_sidecar.helpers import (
     embedding_to_blob,
@@ -159,12 +162,13 @@ def build_router(state: dict[str, Any]) -> APIRouter:
             upsert_entity(conn, req.bot_id, name) for name in req.entities
         ]
 
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO memories (id, bot_id, text, salience, created_ts, "
             "last_recalled_ts, embedding) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (memory_id, req.bot_id, req.text, salience, now, now,
              embedding_to_blob(embedding)),
         )
+        row_rowid = cur.lastrowid
         conn.execute(
             "INSERT INTO vec_memories (memory_id, bot_id, embedding) VALUES (?, ?, ?)",
             (memory_id, req.bot_id, embedding_to_blob(embedding)),
@@ -190,6 +194,27 @@ def build_router(state: dict[str, Any]) -> APIRouter:
             conn, req.bot_id, state["cap_per_bot"], now, state["weights"]
         )
         conn.commit()
+
+        # Fan out to SSE subscribers. Non-blocking in-memory operation.
+        # pubsub is passed through the state dict so it's reachable from both
+        # the HTTP path and the MCP dispatcher (which calls this function
+        # directly, bypassing FastAPI's request injection).
+        pubsub = state.get("pubsub")
+        if pubsub is not None:
+            row_dict = {
+                "rowid": row_rowid,
+                "memory_id": memory_id,
+                "bot_id": req.bot_id,
+                "text": req.text,
+                "created_ts": now,
+                "salience": salience,
+            }
+            try:
+                pubsub.publish(req.bot_id, row_dict)
+            except Exception as e:
+                logger.warning("sse_publish_failed bot_id=%s memory_id=%s err=%s",
+                               req.bot_id, memory_id, e)
+
         return RememberResponse(memory_id=memory_id, evicted=evicted)
 
     @router.post("/memory/forget", response_model=ForgetResponse)
