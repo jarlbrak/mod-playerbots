@@ -36,6 +36,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
+from memory_sidecar.db import open_db
 from memory_sidecar.sse_format import (
     format_sse_error,
     format_sse_heartbeat,
@@ -148,18 +149,23 @@ async def stream_events(
 
     # --- Subscribe FIRST (subscribe-then-replay ordering) ---
     pubsub = request.app.state.pubsub
-    db_conn = request.app.state.mem["conn"]
+    db_path = request.app.state.mem["db_path"]
     queue = pubsub.subscribe(bot_id)
 
     async def event_generator():
         replayed_max_id = replay_cursor
+        # Open a dedicated read-only connection for this stream. This avoids
+        # SQLite's check_same_thread restriction (the shared conn is created
+        # in the lifespan thread, not the asyncio event loop thread) and
+        # prevents the SSE stream from holding the writer connection.
+        stream_conn = open_db(db_path)
         try:
             # Phase 1: Replay missed rows in chunks until caught up.
             # Subscriber is already registered so any rows written now
             # land in the queue; they'll be de-duped in Phase 2.
             local_cursor = replay_cursor
             while True:
-                rows = _fetch_rows_since(db_conn, bot_id, local_cursor, REPLAY_CHUNK_SIZE)
+                rows = _fetch_rows_since(stream_conn, bot_id, local_cursor, REPLAY_CHUNK_SIZE)
                 if not rows:
                     break
                 for r in rows:
@@ -190,6 +196,7 @@ async def stream_events(
             yield format_sse_error(code="internal", message=str(e))
         finally:
             pubsub.unsubscribe(bot_id, queue)
+            stream_conn.close()
 
     return StreamingResponse(
         event_generator(),
