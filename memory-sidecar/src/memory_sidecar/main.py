@@ -11,7 +11,7 @@ from memory_sidecar.embed import EmbeddingClient
 from memory_sidecar.migrations import apply_migrations
 from memory_sidecar.pubsub import PubSub
 from memory_sidecar.recall import ScoringWeights
-from memory_sidecar import routes_memory, routes_personality, routes_goals
+from memory_sidecar import routes_memory, routes_personality, routes_goals, routes_events
 from memory_sidecar.mcp_auth import TokenStore
 from memory_sidecar.mcp_server import build_mcp_server
 
@@ -114,6 +114,7 @@ def create_app(embedder: Optional[Any] = None) -> FastAPI:
     app.include_router(routes_memory.build_router(state))
     app.include_router(routes_personality.build_router(state))
     app.include_router(routes_goals.build_router(state))
+    app.include_router(routes_events.router)
 
     # Build the dispatcher map: tool_name -> async fn that takes pydantic args
     # and returns the route's response. Routes must be mounted FIRST (above).
