@@ -1,10 +1,13 @@
 """HTTP routes for /memory/* (everything except personality + goals)."""
+import logging
 import time
 from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from memory_sidecar.helpers import (
     embedding_to_blob,
@@ -206,7 +209,11 @@ def build_router(state: dict[str, Any]) -> APIRouter:
                 "created_ts": now,
                 "salience": salience,
             }
-            pubsub.publish(req.bot_id, row_dict)
+            try:
+                pubsub.publish(req.bot_id, row_dict)
+            except Exception as e:
+                logger.warning("sse_publish_failed bot_id=%s memory_id=%s err=%s",
+                               req.bot_id, memory_id, e)
 
         return RememberResponse(memory_id=memory_id, evicted=evicted)
 
