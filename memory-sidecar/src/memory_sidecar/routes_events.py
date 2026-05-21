@@ -31,12 +31,14 @@ import json
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from memory_sidecar.db import open_db
+from memory_sidecar.mcp_auth import TokenStore
 from memory_sidecar.sse_format import (
     format_sse_error,
     format_sse_heartbeat,
@@ -79,19 +81,31 @@ def _matches_any_prefix(text: Optional[str], prefixes: list[str]) -> bool:
 
 
 def _check_bearer(request: Request, authorization: Optional[str]) -> None:
-    """Check bearer token when MEM_SSE_BEARER is configured.
+    """Check bearer token against the app's token store.
 
-    When MEM_SSE_BEARER is not set (e.g. in tests without a token store),
-    auth is disabled and any request passes. This mirrors the behavior of
-    the HTTP routes which are open.
+    When MEM_TOKEN_STORE is configured (the YAML with token records), the SSE
+    endpoint requires a valid bearer token. When the token store is absent
+    (e.g. local dev without a token file), auth is disabled.
+
+    Uses the same token store as the MCP wire — loaded from the YAML at
+    MEM_TOKEN_STORE path. The store is cached on app.state to avoid re-reading
+    the file on every request.
     """
-    expected = os.environ.get("MEM_SSE_BEARER", "")
-    if not expected:
-        return  # auth disabled — no bearer configured
+    # Lazy-load the token store from app.state (populated on first call).
+    token_store: Optional[TokenStore] = getattr(request.app.state, "sse_token_store", None)
+    if token_store is None:
+        token_path = os.environ.get("MEM_TOKEN_STORE", "/etc/memory/tokens.yaml")
+        if Path(token_path).exists():
+            token_store = TokenStore.load_yaml(token_path)
+        request.app.state.sse_token_store = token_store  # cache; None means auth disabled
+
+    if token_store is None:
+        return  # auth disabled — no token store configured
+
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="missing bearer token")
     token = authorization.removeprefix("Bearer ").strip()
-    if token != expected:
+    if token_store.find(token) is None:
         raise HTTPException(status_code=401, detail="invalid bearer token")
 
 
