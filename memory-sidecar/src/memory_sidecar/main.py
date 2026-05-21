@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from memory_sidecar.db import open_db, run_migrations as run_legacy_migrations
 from memory_sidecar.embed import EmbeddingClient
 from memory_sidecar.migrations import apply_migrations
+from memory_sidecar.pubsub import PubSub
 from memory_sidecar.recall import ScoringWeights
 from memory_sidecar import routes_memory, routes_personality, routes_goals
 from memory_sidecar.mcp_auth import TokenStore
@@ -19,6 +20,8 @@ def create_app(embedder: Optional[Any] = None) -> FastAPI:
     db_path = os.environ.get("MEM_DB_PATH", "/var/memory/db.sqlite")
     embed_endpoint = os.environ.get("MEM_EMBED_ENDPOINT", "http://127.0.0.1:8081")
     cap_per_bot = int(os.environ.get("MEM_CAP_PER_BOT", "2000"))
+
+    pubsub = PubSub()
 
     state: dict[str, Any] = {
         "db_path": db_path,
@@ -33,6 +36,7 @@ def create_app(embedder: Optional[Any] = None) -> FastAPI:
         ),
         "recency_basis": os.environ.get("MEM_W_REC_TIMESTAMP", "created"),
         "mmr_lambda": float(os.environ.get("MEM_MMR_LAMBDA", "0.7")),
+        "pubsub": pubsub,  # shared with SSE route and routes_memory for fan-out
     }
 
     # Deferred-init holder for the MCP server. The lifespan checks this at
@@ -77,6 +81,7 @@ def create_app(embedder: Optional[Any] = None) -> FastAPI:
 
     app = FastAPI(lifespan=lifespan, title="memory-sidecar")
     app.state.mem = state
+    app.state.pubsub = pubsub  # same PubSub instance shared with routes_memory
 
     import json
     import time as _time
