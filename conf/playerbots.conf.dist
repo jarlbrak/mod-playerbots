@@ -2619,3 +2619,15 @@ AiPlayerbot.LlmAgent.Tier3.SystemPromptSuffix = ""
 # In-process persona cache TTL (s). Bigger TTL = fewer sidecar hits.
 # Default: 600 (10 min)
 AiPlayerbot.LlmAgent.Tier3.PersonaCacheTtlSeconds = 600
+
+# V3.3 — config-gated bot-to-bot whisper ingestion for T3 chat brain.
+# When set to 0 (default), bot-from-bot whispers are silently dropped before
+# T3 ingestion. This prevents infinite reply loops where bot A whispers bot B,
+# bot B stores the memory, bot B's decision loop sees it, and bot B whispers
+# bot A again.
+# When set to 1, bot-from-bot whispers ARE ingested into T3 (memory write +
+# event push). Use only for testing/development. WARNING: risk of infinite
+# reply loop if multiple bots are simultaneously brain-enrolled and both
+# respond to whispers from bots. Keep off in production (default 0).
+# Default: 0
+AiPlayerbot.LlmAgent.BotToBot.AllowWhisperIngestion = 0

@@ -47,6 +47,13 @@ struct LlmAgentConfig {
     // Built-in suffix appended when Tier3_SystemPromptSuffix is empty.
     // Initialized from kDefaultTier3SystemPromptSuffix in LoadLlmAgentConfig.
     std::string Tier3_BuiltInSystemPromptSuffix;
+
+    // V3.3 — bot-to-bot whisper ingestion guard
+    // Default false: bot-from-bot whispers are dropped before T3 ingestion to
+    // prevent infinite reply loops (bot A whispers → memory write → bot A
+    // decides → bot A whispers again). Set to true only for testing/development
+    // when multiple bots are NOT simultaneously brain-enrolled and responding.
+    bool        BotToBot_AllowWhisperIngestion = false;
 };
 
 extern const char* const kDefaultSystemPrompt;
@@ -93,6 +100,8 @@ LlmAgentConfig LoadLlmAgentConfig(const Source& src) {
     cfg.Tier3_SystemPromptSuffix     = src.template Get<std::string>("AiPlayerbot.LlmAgent.Tier3.SystemPromptSuffix",     std::string{});
     cfg.Tier3_PersonaCacheTtlSeconds = src.template Get<uint32_t>   ("AiPlayerbot.LlmAgent.Tier3.PersonaCacheTtlSeconds", uint32_t{600});
     cfg.Tier3_BuiltInSystemPromptSuffix = std::string{kDefaultTier3SystemPromptSuffix};
+
+    cfg.BotToBot_AllowWhisperIngestion = src.template Get<bool>("AiPlayerbot.LlmAgent.BotToBot.AllowWhisperIngestion", false);
     return cfg;
 }
 

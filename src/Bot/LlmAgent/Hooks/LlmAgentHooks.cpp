@@ -54,7 +54,13 @@ void OnWhisperReceived(Player* bot, Player* sender, const std::string& text, uin
         default:
             return;
     }
-    if (sPlayerbotsMgr.GetPlayerbotAI(sender) != nullptr) return;  // bot-to-bot whisper, ignore
+    // Default behaviour: drop bot-from-bot whispers to prevent reply loops.
+    // V3.3: allow ingestion when AiPlayerbot.LlmAgent.BotToBot.AllowWhisperIngestion=1
+    // (testing/development only — risks infinite reply if multiple bots are brain-enrolled
+    // and both are configured to respond to whispers from bots).
+    if (sPlayerbotsMgr.GetPlayerbotAI(sender) != nullptr &&
+        !LlmAgentManager::Instance().Config().BotToBot_AllowWhisperIngestion)
+        return;
 
     // Phase 5.2 v7: addon traffic in 3.3.5a uses regular chat channels (CHAT_MSG_PARTY
     // typically) with a tab-delimited "AddonPrefix\tpayload" string. The chat_type
