@@ -15,6 +15,12 @@ nlohmann::json BuildDigestJson(const LlmBotState& s) {
         {"is_in_combat",  s.self.is_in_combat},
         {"is_resting",    s.self.is_resting},
         {"is_dead",       s.self.is_dead},
+        {"pending_group_invite",
+            s.self.has_pending_invite
+                ? nlohmann::json({
+                    {"from_name",  s.self.pending_invite_from_name},
+                    {"group_type", s.self.pending_invite_group_type}})
+                : nlohmann::json(nullptr)},
     };
 
     j["location"] = {
@@ -79,6 +85,7 @@ nlohmann::json BuildDigestJson(const LlmBotState& s) {
 // ===========================================================================
 #ifndef LLMAGENT_UNIT_TESTS
 
+#include "Group.h"
 #include "PlayerbotAI.h"
 #include "Player.h"
 #include "Map.h"
@@ -236,6 +243,25 @@ LlmBotState SnapshotBot(PlayerbotAI* botAI) {
     // social.recent_whispers: empty in Phase 2; whisper hook (Task 9) drops
     // whisper content into event_log instead. If smoke data shows the LLM
     // wants the structured form, Phase 3 adds a second sliding window.
+
+    // social.in_group + social.group_members from bot's current Group.
+    if (Group* grp = bot->GetGroup()) {
+        s.social.in_group = true;
+        for (Group::MemberSlotList::const_iterator it = grp->GetMemberSlots().begin();
+             it != grp->GetMemberSlots().end(); ++it) {
+            if (it->guid == bot->GetGUID()) continue;
+            s.social.group_members.push_back(it->name);
+        }
+    }
+
+    // pending_group_invite — Stage 2 triage gate reads this.
+    if (Group* invite = bot->GetGroupInvite()) {
+        s.self.has_pending_invite = true;
+        if (Player* leader = ObjectAccessor::FindPlayer(invite->GetLeaderGUID())) {
+            s.self.pending_invite_from_name = leader->GetName();
+        }
+        s.self.pending_invite_group_type = invite->isRaidGroup() ? "raid" : "party";
+    }
 
     // ===== Phase 3: memory_hints + persona =====
     {

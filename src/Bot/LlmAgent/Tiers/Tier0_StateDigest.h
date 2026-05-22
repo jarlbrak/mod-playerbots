@@ -19,6 +19,10 @@ struct BotSelf {
     bool     is_in_combat = false;
     bool     is_resting = false;
     bool     is_dead = false;
+    // Pending group invite (false/empty when no invite outstanding).
+    bool        has_pending_invite = false;
+    std::string pending_invite_from_name;  // leader who sent the invite
+    std::string pending_invite_group_type; // "party" or "raid"
 };
 
 struct BotLocation {
