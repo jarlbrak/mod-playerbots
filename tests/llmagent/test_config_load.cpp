@@ -167,6 +167,7 @@ TEST_CASE("LlmAgentConfig Tier3 defaults") {
     CHECK(cfg.Tier3_SystemPromptSuffix.empty());
     CHECK(cfg.Tier3_PersonaCacheTtlSeconds == 600u);
     CHECK(!cfg.Tier3_BuiltInSystemPromptSuffix.empty());
+    CHECK(cfg.BotToBot_AllowWhisperIngestion == false);
 }
 
 TEST_CASE("LlmAgentConfig Tier3 overrides applied") {
@@ -187,4 +188,12 @@ TEST_CASE("LlmAgentConfig Tier3 overrides applied") {
     CHECK(cfg.Tier3_MaxUtteranceChars == 120u);
     CHECK(cfg.Tier3_SystemPromptSuffix == "custom suffix");
     CHECK(cfg.Tier3_PersonaCacheTtlSeconds == 60u);
+}
+
+TEST_CASE("LlmAgentConfig BotToBot overrides applied") {
+    StubConfigSource src;
+    src.values["AiPlayerbot.LlmAgent.BotToBot.AllowWhisperIngestion"] = "1";
+
+    LlmAgentConfig cfg = LoadLlmAgentConfig(src);
+    CHECK(cfg.BotToBot_AllowWhisperIngestion == true);
 }
