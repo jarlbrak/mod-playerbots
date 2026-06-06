@@ -1516,6 +1516,14 @@ void PlayerbotAI::DoNextAction(bool min)
 
     bool minimal = !this->AllowActivity();
 
+    // M1-own: external ownership guard — suppress all action execution while owned.
+    // Preserves world-presence, packet handlers, and the death/ress transitions above.
+    if (m_externallyOwned)
+    {
+        SetNextCheckDelay(sPlayerbotAIConfig.reactDelay);
+        return;
+    }
+
     currentEngine->DoNextAction(nullptr, 0, (minimal || min));
 
     if (minimal)

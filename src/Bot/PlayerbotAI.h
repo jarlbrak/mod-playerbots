@@ -611,6 +611,13 @@ public:
     bool   ahErrandPending = false;
     uint32 lastAhVisitMs   = 0;
 
+    // M1-own — external ownership flag. When true, DoNextAction skips all
+    // strategy/trigger/action evaluation so the Rust system has clean control.
+    // Set via bot.set_ai_enabled (HarnessBridgeDispatch). Main-thread only.
+    bool m_externallyOwned = false;
+    void SetExternallyOwned(bool owned) { m_externallyOwned = owned; }
+    bool IsExternallyOwned() const      { return m_externallyOwned; }
+
     // Schedules a callback to run once after <delayMs> milliseconds.
     void AddTimedEvent(std::function<void()> callback, uint32 delayMs);
 
