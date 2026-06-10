@@ -102,6 +102,34 @@ TEST_CASE("BuildDigestJson handles empty LlmBotState without crashing") {
     CHECK(j["social"]["nearby_humans"].is_array());
 }
 
+TEST_CASE("BuildDigestJson self block contains power/combo keys") {
+    auto j = BuildDigestJson(make_grimblade());
+    CHECK(j["self"].contains("power_type"));
+    CHECK(j["self"].contains("power_pct"));
+    CHECK(j["self"].contains("combo_points"));
+}
+
+TEST_CASE("BuildDigestJson power fields have correct default types") {
+    // Fixture builds LlmBotState directly (no live bot); verify defaults flow through.
+    LlmBotState s;
+    auto j = BuildDigestJson(s);
+    CHECK(j["self"]["power_pct"].get<int>() == 0);
+    CHECK(j["self"]["combo_points"].get<int>() == 0);
+    // power_type is a string (default-constructed std::string is "")
+    CHECK(j["self"]["power_type"].is_string());
+}
+
+TEST_CASE("BuildDigestJson power_type reflects fixture value") {
+    LlmBotState s;
+    s.self.power_type = "rage";
+    s.self.power_pct = 45;
+    s.self.combo_points = 3;
+    auto j = BuildDigestJson(s);
+    CHECK(j["self"]["power_type"].get<std::string>() == "rage");
+    CHECK(j["self"]["power_pct"].get<int>() == 45);
+    CHECK(j["self"]["combo_points"].get<int>() == 3);
+}
+
 TEST_CASE("BuildDigestJson event_log preserves order and content") {
     LlmBotState s;
     s.event_log = {"killed Murloc (+50 xp)", "received whisper from RealBob: hi"};

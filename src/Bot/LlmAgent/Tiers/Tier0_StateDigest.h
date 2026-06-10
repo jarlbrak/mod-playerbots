@@ -15,6 +15,9 @@ struct BotSelf {
     int32_t  level = 0;
     int32_t  hp_pct = 100;
     int32_t  mana_pct = -1;       // -1 = nullable (mapped to JSON null)
+    std::string power_type;       // "rage" | "energy" | "mana" | "other"
+    int32_t  power_pct = 0;       // primary power 0-100
+    int32_t  combo_points = 0;    // 0 when N/A (CP are target-relative in 3.3.5)
     int64_t  gold_copper = 0;
     bool     is_in_combat = false;
     bool     is_resting = false;

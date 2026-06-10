@@ -11,6 +11,9 @@ nlohmann::json BuildDigestJson(const LlmBotState& s) {
         {"level",         s.self.level},
         {"hp_pct",        s.self.hp_pct},
         {"mana_pct",      s.self.mana_pct < 0 ? nlohmann::json(nullptr) : nlohmann::json(s.self.mana_pct)},
+        {"power_type",    s.self.power_type},
+        {"power_pct",     s.self.power_pct},
+        {"combo_points",  s.self.combo_points},
         {"gold_copper",   s.self.gold_copper},
         {"is_in_combat",  s.self.is_in_combat},
         {"is_resting",    s.self.is_resting},
@@ -146,6 +149,14 @@ LlmBotState SnapshotBot(PlayerbotAI* botAI) {
     s.self.level            = bot->GetLevel();
     s.self.hp_pct           = bot->GetMaxHealth() > 0 ? int(100.0f * bot->GetHealth() / bot->GetMaxHealth()) : 0;
     s.self.mana_pct         = bot->GetMaxPower(POWER_MANA) > 0 ? int(100.0f * bot->GetPower(POWER_MANA) / bot->GetMaxPower(POWER_MANA)) : -1;
+    {
+        Powers pt = bot->getPowerType();
+        s.self.power_type   = pt == POWER_RAGE ? "rage" : pt == POWER_ENERGY ? "energy"
+                            : pt == POWER_MANA ? "mana" : "other";
+        s.self.power_pct    = bot->GetMaxPower(pt) > 0
+                            ? int(100.0f * bot->GetPower(pt) / bot->GetMaxPower(pt)) : 0;
+        s.self.combo_points = bot->GetComboPoints();
+    }
     s.self.gold_copper      = static_cast<int64_t>(bot->GetMoney());
     s.self.is_in_combat     = bot->IsInCombat();
     s.self.is_resting       = bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING);
